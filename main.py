@@ -1006,4 +1006,263 @@ for project in list_projects:
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 logging.info('Admin logged in')
 
-print(list_projects)
+##Read the forms
+
+#list_projects = [{'id': '69c70697-3747-4120-b185-dbd7d54388a0', 'displayName': 'JTC R&R to Biopolis Phase 1 (Synchro)', 'projectNumber': 'JTC BIOR (Synchro)'}]
+
+#Form Type for OT Request Form
+OTReq = "Overtime Request Form"
+
+#Issue Type for RSS Attendance Form
+RSS = "RSS Attendance V1"
+
+from datetime import date
+
+today = date.today()
+
+for project in list_projects:
+    #Update RSS Attendance Form
+    auth.scope = ["issues:read"]
+    authorization_key = auth.getToken()
+    issues_API = IssuesAPI(authorization_key)
+    
+    #print(authorization_key)
+    ##Get Attendance Form
+    
+    ##Get all the issue data ID related to RSS Attendance V1
+    #print(project['id'])
+    list_issueDataInstances = issues_API.getProjectIssueData(project['id'], "RSS Attendance V1")
+    #print(list_issueDataInstances)
+    list_issueDetails = []
+   # print(list_issueDataInstances)
+    for issues in list_issueDataInstances:
+        #for every issue ID, get the Issue data details
+        issueDetail = issues_API.getIssueDataDetails(issues['id'])
+
+        if not(issueDetail is None):
+            #add to a list
+            list_issueDetails.append(issueDetail)
+            #print(list_issueDetails)
+    
+    #Group if there is more than one RSS attendance form type
+    dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
+    
+    print("Extracted RSS Attendance Form")
+    #iterate for every RSS attendance issue
+    for key in dictLists_IssueDataDetails.keys():
+        #convert into dataframe
+        dfRSS = pd.json_normalize(dictLists_IssueDataDetails[key])
+        #Convert the datetime into just day, month and year
+        dfRSS['createdDateTime'] = dfRSS['createdDateTime'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+        #To filter month and year
+        dfRSS['yearmonth'] = dfRSS['createdDateTime'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m'))
+        
+        #To create a dataframe for all RSS form within the month
+        #dfRSS2 = dfRSS.loc[(dfRSS["yearmonth"] == str(today)[:-3])]
+        
+        
+        ## Testing for within a month and after
+        dfRSS2 = dfRSS
+        
+    ## Update RSS Form Data
+
+    # TotalOff
+    # TotalLeaves 
+    # TotalOtherRemarks
+    # TotalCovered
+    # TotalNonCovered
+    # Total_x200_Working_Days
+    # TotalWorkingHours
+    # Total_x200_Overtime_Hours
+
+    ##Calculate the total leave, off, mc, hospitalisation
+
+    dfRSS2["Sum_FullLeave"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Full Day Leave") ,axis=1)
+
+    dfRSS2["Sum_HalfLeave"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Half Day Leave") ,axis=1)
+
+    dfRSS2["Sum_FullOff"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Full Day Off") ,axis=1)
+
+    dfRSS2["Sum_HalfOff"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Half Day Off") ,axis=1)
+
+    dfRSS2["Sum_Leave"] = dfRSS2["Sum_FullLeave"]  + dfRSS2["Sum_HalfLeave"]*0.5
+
+    dfRSS2["TotalOff"] = dfRSS2["Sum_FullOff"]  + dfRSS2["Sum_HalfOff"]*0.5
+
+
+    dfRSS2["Sum_HalfMC"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Half Day MC") ,axis=1)
+
+    dfRSS2["Sum_FullMC"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Full Day MC") ,axis=1)
+
+    dfRSS2["Sum_Hospitalisation"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Hospitalisation Leave") ,axis=1)
+
+    dfRSS2["Sum_SickLeave"] = dfRSS2["Sum_FullMC"]  + dfRSS2["Sum_HalfMC"]*0.5 + dfRSS2["Sum_Hospitalisation"]
+
+    dfRSS2["TotalLeaves"] = dfRSS2["Sum_SickLeave"] + dfRSS2["Sum_Leave"]
+
+
+    dfRSS2["Sum_FullOthers"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Full Day Others") ,axis=1)
+
+    dfRSS2["Sum_HalfOthers"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Half Day Others") ,axis=1)
+
+    dfRSS2["Sum_Others"] = dfRSS2["Sum_FullOthers"]  + dfRSS2["Sum_HalfOthers"]*0.5
+
+
+
+    #Calculate absent day with covering officer
+    dfRSS2["TotalFullCovered"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Full Day Cover") ,axis=1)
+    dfRSS2["TotalHalfCovered"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Half Day Cover") ,axis=1)
+    dfRSS2["TotalCovered"] = dfRSS2["TotalFullCovered"]  + dfRSS2["TotalHalfCovered"]*0.5
+
+    dfRSS2["TotalNonCovered"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="No Cover") ,axis=1)
+
+    dfRSS2["TotalAbsentDays"] = dfRSS2["TotalOff"] + dfRSS2["Sum_Others"] +dfRSS2["TotalLeaves"]
+
+    dfRSS2["TotalHalfCovered"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Half Day Cover") ,axis=1)
+    dfRSS2["TotalCovered"] = dfRSS2["TotalFullCovered"]  + dfRSS2["TotalHalfCovered"]*0.5
+
+    dfRSS2["TotalNonCovered"] = dfRSS2["TotalAbsentDays"]  - dfRSS2["TotalCovered"]
+
+    dfRSS2["Sum_NotAvailable"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Not Available") ,axis=1)
+    dfRSS2["Sum_NA"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="NA") ,axis=1)
+    
+    dfRSS2["Sum_Weekend"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Weekend (Sunday)") ,axis=1)
+
+    dfRSS2["Sum_Public Holiday"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Public Holiday") ,axis=1)
+
+    dfRSS2["Sum_Saturday"] = dfRSS2.apply(lambda row: sum(row[0:len(dfRSS2.columns)]=="Sat") ,axis=1)
+
+    dfRSS2["Sum_Day"] = 31
+
+    dfRSS2["Sum_WorkingDays"] = dfRSS2["Sum_Day"] - dfRSS2["Sum_NotAvailable"] - dfRSS2["Sum_SickLeave"] - dfRSS2["Sum_Others"] - dfRSS2["Sum_Leave"] - dfRSS2["Sum_Public Holiday"] - dfRSS2["Sum_Weekend"] - dfRSS2["Sum_NA"] 
+
+    dfRSS2["Sum_Day_Month"] = 26
+
+    dfRSS2["Total__x0020__Working__x0020__Days"] = dfRSS2["Sum_Day_Month"] - dfRSS2["TotalNonCovered"] - dfRSS2["Sum_NotAvailable"]
+    
+    #Total__x0020__Working__x0020__Days
+    #dfRSS2["Sum_WorkingHours"] = dfRSS2["Sum_WorkingDays"] * 8
+
+
+    ##Update OT hours
+    ##Only update days that there are values 
+    OTHourlist = []
+    for d in range(1,32):
+        if "properties.D" + str(d) + "OTTimein" in dfRSS2.columns:
+            dfRSS2["D" + str(d) + "OTTimein"] = pd.to_datetime(dfRSS2["properties.D" + str(d) + "OTTimein"], format= '%H:%M',errors='coerce')
+        else:
+            continue
+        if "properties.D" + str(d) + "OTTimeOut" in dfRSS2.columns:
+            dfRSS2["D" + str(d) + "OTTimeOut"] = pd.to_datetime(dfRSS2["properties.D" + str(d) + "OTTimeOut"], format= '%H:%M', errors='coerce')
+        else:
+            continue
+        if "properties.D" + str(d) + "__x0020__OT__x0020__Meal" in dfRSS2.columns:
+            dfRSS2["D" + str(d) + "__x0020__OT__x0020__Meal"] = dfRSS2["properties.D" + str(d) + "__x0020__OT__x0020__Meal"]
+        else:
+            continue
+
+        dfRSS2["D" + str(d) + "OT"] = (dfRSS2["D" + str(d) + "OTTimeOut"].apply(lambda x:x.hour) - dfRSS2["D" + str(d) + "OTTimein"].apply(lambda x:x.hour))+(dfRSS2["D" + str(d) + "OTTimeOut"].apply(lambda x:x.minute) - dfRSS2["D" + str(d) + "OTTimein"].apply(lambda x:x.minute))/60 - dfRSS2["properties.D" + str(d) + "__x0020__OT__x0020__Meal"] 
+        
+        ## if OT hours = -ve, need to add 24 hours
+        dfRSS2["D" + str(d) + "OT"] = dfRSS2["D" + str(d) + "OT"].apply(lambda x: x + 24 if x < 0 else x)
+        
+        #print(dfRSS2["D" + str(d) + "_Work_Hour"])
+        OTHourlist.append("D" + str(d) + "OT")
+
+    #WorkHourlist
+    dfRSS2["Total_x200_Overtime_Hours"] = dfRSS2[OTHourlist].sum(axis=1)
+
+    ##Update Working Hours
+
+    WorkHourlist = []
+    for d in range(1,32):
+        if "properties.D" + str(d) + "__x0020__Time__x0020__In" in dfRSS2.columns:
+            dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"] = pd.to_datetime(dfRSS2["properties.D" + str(d) + "__x0020__Time__x0020__In"], format= '%H:%M', errors='coerce')
+        else:
+            continue
+        if "properties.D" + str(d) + "__x0020__Time__x0020__Out" in dfRSS2.columns:
+            dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"] = pd.to_datetime(dfRSS2["properties.D" + str(d) + "__x0020__Time__x0020__Out"], format= '%H:%M', errors='coerce')
+        else:
+            continue
+        dfRSS2["D" + str(d) + "_Work_Hour"] = (dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(lambda x:x.hour) - dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"].apply(lambda x:x.hour))+(dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(lambda x:x.minute) - dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"].apply(lambda x:x.minute))/60
+        #print(dfRSS2["D" + str(d) + "_Work_Hour"])
+        ## if OT hours = -ve, need to add 24 hours
+        dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2["D" + str(d) + "_Work_Hour"].apply(lambda x: x + 24 if x < 0 else x)
+        
+        ##If more than 8, put 8. Elif if between 4 to 8, minus 1 and less than 4, remain
+        
+        dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2["D" + str(d) + "_Work_Hour"].apply(lambda x: 8 if x > 8 else ((x-1) if x > 4 else x))
+        WorkHourlist.append("D" + str(d) + "_Work_Hour")
+    
+    #WorkHourlist
+    
+    dfRSS2["Sum_WorkingHours"] = dfRSS2[WorkHourlist].sum(axis=1)
+
+    #Update Attendance Form
+    auth.scope = ["issues:modify"]
+    authorization_key = auth.getToken()
+    issues_API = IssuesAPI(authorization_key)
+
+    for id in dfRSS2['id']:
+        #print(dfRSS2["status"].loc[dfRSS2["id"] == id].values[0])    
+        if dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Assigned to RSS" or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Send to Main Contractor For Verification" or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Send to Consultant For Verification"or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Send to JTC For Verification" or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Send to Lead RSS For Verification":
+        ##Collate all the work hour needs to be updated
+            AddRemarks = {}
+            for Day in range(1,32):
+                DDay = "D" + str(Day) +"_Work_Hour"
+                if DDay in dfRSS2.columns:
+                    #if it is not a null value
+                    if not(pd.isnull(dfRSS2[dfRSS2['id'] == id]["D" + str(Day) +"_Work_Hour"].values[0])):
+                        #Append the work hour into the remarks to be updated
+                        AddRemarks["D"+ str(Day) + "__x0020__Work__x0020__Hour"] = int(dfRSS2[dfRSS2['id'] == id]["D" + str(Day) +"_Work_Hour"].values[0])
+                        test = "D" + str(Day) + "OT"
+                        if test in dfRSS2.columns:
+                            if not(pd.isnull(dfRSS2[dfRSS2['id'] == id]["D" + str(Day) + "OT"].values[0])):
+                                AddRemarks["D"+ str(Day) + "__x0020__OT"] = dfRSS2[dfRSS2['id'] == id]["D" + str(Day) +"OT"].values[0]
+                                #print("ok")
+                            else:
+                                continue
+                        else:
+                            continue
+                    else:
+                        test = "D" + str(Day) + "OT"
+                        if test in dfRSS2.columns:  
+                            if not(pd.isnull(dfRSS2[dfRSS2['id'] == id]["D" + str(Day) + "OT"].values[0])):
+                                AddRemarks["D"+ str(Day) + "__x0020__OT"] = dfRSS2[dfRSS2['id'] == id]["D" + str(Day) +"OT"].values[0]
+                            else:
+                                continue
+                            #print("ok")
+                        else:
+                            continue
+                else:
+                    continue
+            #print(id)
+            updatejsonload = {
+                    "assignee": {
+                        "displayName": str(dfRSS2[dfRSS2['id'] == id]["assignee.displayName"].values[0]),
+                        "id": str(dfRSS2[dfRSS2['id'] == id]["assignee.id"].values[0])
+                    },
+                    "properties": {
+                        "Updated__x0020__Date__x0020__By": str(today),
+                        "TotalOff": dfRSS2[dfRSS2['id'] == id]["TotalOff"].values[0],
+                        "TotalLeaves": dfRSS2[dfRSS2['id'] == id]["TotalLeaves"].values[0],
+                        #"TotalMCs": dfRSS2[dfRSS2['id'] == id]["Sum_SickLeave"].values[0],
+                        "TotalOtherRemarks": dfRSS2[dfRSS2['id'] == id]["Sum_Others"].values[0],
+                        "TotalCovered": dfRSS2[dfRSS2['id'] == id]["TotalCovered"].values[0],
+                        "TotalNonCovered": dfRSS2[dfRSS2['id'] == id]["TotalNonCovered"].values[0],
+                        "Total__x0020__Working__x0020__Days": str(dfRSS2[dfRSS2['id'] == id]["Total__x0020__Working__x0020__Days"].values[0]),
+                        "TotalWorkingHours": dfRSS2[dfRSS2['id'] == id]["Sum_WorkingHours"].values[0],
+                        "Total__x0020__Overtime__x0020__Hours": dfRSS2[dfRSS2['id'] == id]["Total_x200_Overtime_Hours"].values[0]
+                    },
+                    #"formId": formId
+                }
+            updatejsonload["properties"].update(AddRemarks)
+            #print(updatejsonload)
+            updatejson_data = json.dumps(updatejsonload)
+        
+            #print(updatejson_data)
+            updateissue = issues_API.updateIssueData(id, updatejson_data)
+            print(str(dfRSS2[dfRSS2['id'] == id]["assignee.displayName"].values[0]) + "'s RSS Form updated")
+        else:
+            continue
+
