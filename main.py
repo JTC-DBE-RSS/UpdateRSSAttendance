@@ -324,6 +324,561 @@ class ProjectsAPI:
         except Exception as e:
             errorhandler('getAllProjects', 'exception trigged'+ e )
 
+            
+    def getProjectTeamMembers(self,projectId):
+        '''
+        Get all projects team member.
+        return: list_projects_team
+        '''
+        url = f'https://api.bentley.com/projects/{projectId}/members'
+        #print(url)
+        try:
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+            'Authorization': self.authorization_key}
+            response = requests.get(url, headers=headers)
+            
+            list_projectTeamMember = []
+
+            while(True):
+                response = requests.get(url, headers=headers)
+                if(response.status_code == 200):
+                    content = jsonParser(response.text)
+                    list_projectTeamMember.extend(content['members'])
+                        
+                    if('next' in content['_links']):
+                        url = content['_links']['next']['href']
+
+                    else:
+                        return list_projectTeamMember
+
+                else:
+                    print('getFormDataDetails failed', response.status_code)
+                    return None
+
+#             if(response.status_code == 200):
+#                 content = jsonParser(response.text)
+#                 list_projects_team = (content['members'])
+#                 return list_projects_team
+
+#             else:
+#                 errorhandler('getProjectTeamMembers', 'failed'+ response.status_code )
+
+        except Exception as e:
+            errorhandler('getProjectTeamMembers', 'exception trigged'+ e )
+
+
+###### Forms            
+            
+class FormsAPI:
+    def __init__(self, key):
+        self.authorization_key = key
+
+    def getProjectFormData(self, projectId, formtype):
+        '''
+        Get form data instances.
+        input: (str)projectId, The GUID of the project to get forms for.
+        return: (list)list_formDataInstances, The list of form data instances under the project. 
+                [object1, object2 ...], object1->{id:'', displayname:'', type:'', state:''}
+        '''
+        try:
+            url = f'https://api.bentley.com/forms/'
+            #url = f'https://api.bentley.com/forms/?projectId={projectId}'
+            params = {"type": formtype,
+                      'projectId': projectId
+                    }
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            list_formDataInstances = []
+
+            while(True):
+                response = requests.get(url, headers=headers, params=params)
+                #print(response)
+                if(response.status_code == 200):
+                    content = jsonParser(response.text)
+                    list_formDataInstances.extend(content['formDataInstances'])
+                        
+                    if('next' in content['_links']):
+                        url = content['_links']['next']['href']
+
+                    else:
+                        return list_formDataInstances
+
+                else:
+                    print('getFormDataDetails failed', response.status_code)
+                    return None
+
+        except Exception as e:
+            print('getFormDataDetails except trigged', e)
+            return None
+
+    def getFormDataDetails(self, formId):
+        '''
+        Get form data details.
+        input: (str)formId, The ID of the form data instance to retrieve.
+        return: (dict)content, The dict of form data details. 
+                {
+                    'formData':{
+                        id:'', 
+                        subject:'', 
+                        description:'', 
+                        dueDate:'', 
+                        type:'',
+                        ...}
+                }
+        '''
+        try:
+            url = f'https://api.bentley.com/forms/{formId}'
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+
+            response = requests.get(url, headers=headers)     
+            if(response.status_code == 200):
+                content = jsonParser(response.text)
+                
+                return content
+
+            else:
+                errorhandler('getFormDataDetails', 'failed'+ response.status_code ) 
+
+        except Exception as e:
+            errorhandler('getFormDataDetails', 'exception trigged'+ e )
+    
+    def getFormDataAttachments(self, formId):
+        '''
+        Get form data attachments ID.
+        input: (str)formId, The ID of the form data instance to retrieve.
+        return: (dict)content, The dict of form data attachments details. 
+                {
+                    "attachments": [{
+                             "id": "XZzxOCC8sVvUcgeXz1Ih_exlLgPfRTpAuShXz1cTpAu",
+                             "fileName": "CrackedConcrete.png",
+                             "createdDateTime": "2020-10-20T16:16:30.6704320Z",
+                             "size": 34770,
+                             "caption": "Picture of the cracked concrete",
+                             "binding": null,
+                             "type": "png"
+                        },
+                        {
+                             "id": "XZzxOCC8sVvUcgeXz1Ih_exlLgPfRTpAuShXz1cTpAu",
+                             "fileName": "StreetView.png",
+                             "createdDateTime": "2020-10-20T16:08:30.2804722Z",
+                             "size": 56893,
+                             "caption": "Picture showing the bridge from the perspective of an approaching car",
+                             "binding": "Location",
+                             "type": "png"
+                        }
+                    ]
+                }
+        Dict{Attachments: List[Dict{"id": },{"id"}]}
+        '''
+        try:
+            url = f'https://api.bentley.com/forms/{formId}/attachments'
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+
+            response = requests.get(url, headers=headers)     
+            if(response.status_code == 200):
+                content = jsonParser(response.text)
+
+                return content
+
+            else:
+                errorhandler('getFormDataAttachments', 'failed'+ response.status_code ) 
+
+        except Exception as e:
+            errorhandler('getFormDataAttachments', 'exception trigged'+ e )
+    
+    def getFormAttachments(self, formId, attachmentId):
+        '''
+        Get form data attachments based on form Id and attachment ID.
+        input: (str)formId, The ID of the form data instance to retrieve.
+        (str)attachmentId, The ID of the form attachment to retrieve.
+        return: The attachment's file contents
+        
+        '''
+        try:
+            url = f'https://api.bentley.com/forms/{formId}/attachments/{attachmentId}'
+            
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+
+            response = requests.get(url, headers=headers, params=params)     
+            if(response.status_code == 200):
+                #content = response.read()
+                #content = jsonParser(response)
+
+                return response
+
+            else:
+                errorhandler('getFormAttachments', 'failed'+ response.status_code ) 
+
+        except Exception as e:
+            errorhandler('getFormAttachments', 'exception trigged'+ e )
+
+    def exportFormPdfs(self, formId, folderId):
+        '''
+        Get form data attachments based on form Id and folder ID.
+        input: (str)formId, The ID of the form data instance to retrieve.
+        (str)folderId, The ID of the folder to retrieve.
+        return: The export's file contents
+        fb8p_AI-gEmA8dDxsQ-yiJ2t0gYGwz1PoazaH1hSMOM
+        '''
+        try:
+            #https://api.bentley.com/forms/storageExport?ids[&includeHeader][&fileType][&folderId]
+            url = f'https://api.bentley.com/forms/storageExport?ids={formId}&folderId={folderId}'
+
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+#             params = {"folderId": folderId,
+#                     }
+            response = requests.get(url, headers=headers)     
+            if(response.status_code == 200):
+                
+                #content = jsonParser(response)
+
+                return response
+
+            else:
+                errorhandler('exportFormPdfs', 'failed'+ str(response.status_code) ) 
+
+        except Exception as e:
+            print(e)
+            #errorhandler('exportFormPdfs', 'exception trigged'+ str(e) )        
+
+    
+    def updateFormData(self, formId, updateformjsonload):
+        '''
+        Create issue data form
+        input: (str)issueId, The ID of the issue data instance to retrieve.
+        return: (dict)content, The dict of issue data details. 
+                {
+                    'issueData':{
+                        id:'', 
+                        subject:'', 
+                        description:'', 
+                        dueDate:'', 
+                        type:'',
+                        ...}
+                }
+        '''
+        try:
+            url = f'https://api.bentley.com/forms/{formId}'
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+            #convert string or dictionary into json format
+            # json_data = payload
+            #print (json_data)
+            response = requests.patch(url, data=updateformjsonload, headers=headers)
+               
+            if(response.status_code == 200):
+                content = jsonParser(response.text)
+                
+                return content
+
+            else:
+                errorhandler('updateFormData', ' failed '+ str(response.status_code) ) 
+
+        except Exception as e:
+            errorhandler('updateFormData', ' exception trigged '+ str(e) )  
+
+##### Issues
+            
+class IssuesAPI:
+    def __init__(self, key):
+        self.authorization_key = key
+        
+    def getProjectIssueDefinitions(self, projectId, formtype):
+        '''
+        Get issue data definition.
+        input: (str)projectId, The GUID of the project to get issue.
+        return: (list)list_IssueDataInstances, The list of issue data instances under the project. 
+                [object1, object2 ...], object1->{id:'', displayname:'', type:'', state:''}
+        '''
+        try:
+            url = f'https://api.bentley.com/issues/formDefinitions?'
+            
+            params = {'type': formtype,
+                      'projectId': projectId
+                    }
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+            #list_issueDataDefinition = []
+
+            while(True):
+                response = requests.get(url, headers=headers, params = params)
+                if(response.status_code == 200):
+                    content = jsonParser(response.text)
+                    return content
+
+                else:
+                    print('getIssueDataDefinitions failed', response.status_code)
+                    return None
+
+        except Exception as e:
+            print('getIssueDataDefinition except trigged', e)
+            return None        
+    
+
+    def getProjectIssueData(self, projectId, issuetype):
+        '''
+        Get issue data instances.
+        input: (str)projectId, The GUID of the project to get issue.
+        return: (list)list_IssueDataInstances, The list of issue data instances under the project. 
+                [object1, object2 ...], object1->{id:'', displayname:'', type:'', state:''}
+        '''
+        try:
+            #url = f'https://api.bentley.com/issues/'
+            url = f'https://api.bentley.com/issues/?projectId={projectId}&type={issuetype}'
+#             params = {'type': issuetype,
+#                       '?projectId': projectId
+#                    }
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            list_issueDataInstances = []
+
+            while(True):
+                response = requests.get(url, headers=headers)
+                #response = requests.get(url, headers=headers, params = params)
+                if(response.status_code == 200):
+                    content = jsonParser(response.text)
+                    list_issueDataInstances.extend(content['issues'])
+
+                    if('next' in content['_links']):
+                        url = content['_links']['next']['href']
+
+                    else:
+                        return list_issueDataInstances
+
+                else:
+                    print('getProjectIssueData failed', response.status_code)
+                    return None
+
+        except Exception as e:
+            print('getProjectIssueData except trigged', e)
+            return None
+
+    def getIssueDataDetails(self, issueId):
+        '''
+        Get issue data details.
+        input: (str)issueId, The ID of the issue data instance to retrieve.
+        return: (dict)content, The dict of issue data details. 
+                {
+                    'issueData':{
+                        id:'', 
+                        subject:'', 
+                        description:'', 
+                        dueDate:'', 
+                        type:'',
+                        ...}
+                }
+        '''
+        try:
+            url = f'https://api.bentley.com/issues/{issueId}'
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+
+            response = requests.get(url, headers=headers)     
+            if(response.status_code == 200):
+                content = jsonParser(response.text)
+                
+                return content
+
+            else:
+                errorhandler('getIssueDataDetails', 'failed'+ response.status_code ) 
+
+        except Exception as e:
+            errorhandler('getIssueDataDetails', 'exception trigged'+ e )
+            
+    def postIssueData(self, jsonload):
+        '''
+        Create issue data form
+        input: (str)issueId, The ID of the issue data instance to retrieve.
+        return: (dict)content, The dict of issue data details. 
+                {
+                    'issueData':{
+                        id:'', 
+                        subject:'', 
+                        description:'', 
+                        dueDate:'', 
+                        type:'',
+                        ...}
+                }
+        '''
+        try:
+            url = f'https://api.bentley.com/issues/'
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+            #convert string or dictionary into json format
+            # json_data = payload
+            #print (json_data)
+            response = requests.post(url, data=jsonload, headers=headers)
+               
+            if(response.status_code == 201):
+                content = jsonParser(response.text)
+                
+                return content
+
+            else:
+                errorhandler('postIssueData', 'failed'+ str(response.status_code) ) 
+
+        except Exception as e:
+            errorhandler('postIssueData', 'exception trigged'+ str(e) )
+            
+    def updateIssueData(self, issueId, updatejsonload):
+        '''
+        update issue data form
+        input: (str)issueId, The ID of the issue data instance to retrieve.
+        return: (dict)content, The dict of issue data details. 
+                {
+                    'issueData':{
+                        id:'', 
+                        subject:'', 
+                        description:'', 
+                        dueDate:'', 
+                        type:'',
+                        ...}
+                }
+        '''
+        try:
+            
+            url = f'https://api.bentley.com/issues/{issueId}'
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+            #convert string or dictionary into json format
+            # json_data = payload
+            #print (json_data)
+            response = requests.patch(url, data=updatejsonload, headers=headers)
+               
+            if(response.status_code == 200):
+                content = jsonParser(response.text)
+                
+                return content
+
+            else:
+                errorhandler('updateIssueData', ' failed '+ str(response.status_code) ) 
+
+        except Exception as e:
+            errorhandler('updateIssueData', ' exception trigged '+ str(e) )    
+    
+    def exportIssuePdfs(self, IssueId, folderId):
+        '''
+        Get issue data attachments based on issue Id and issue ID.
+        input: (str)issueId, The ID of the issue data instance to retrieve.
+        (str)folderId, The ID of the folder to retrieve.
+        return: The export's file contents
+        fb8p_AI-gEmA8dDxsQ-yiJ2t0gYGwz1PoazaH1hSMOM
+        '''
+        try:
+             #https://api.bentley.com/issues/storageExport?ids[&includeHeader][&fileType][&folderId]
+            #https://api.bentley.com/issues/storageExport?ids[&includeHeader][&fileType][&folderId]
+            url = f'https://api.bentley.com/issues/storageExport?ids={IssueId}&folderId={folderId}'
+
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+#             params = {"folderId": folderId,
+#                       "fileType": "pdf",
+#                       "includeHeader": "true"
+#                     }
+            response = requests.get(url, headers=headers)     
+            if(response.status_code == 200):
+                
+                #content = jsonParser(response)
+
+                return response
+
+            else:
+                errorhandler('exportIssuePdfs', 'failed'+ str(response.status_code) ) 
+
+        except Exception as e:
+            errorhandler('exportIssuePdfs', 'exception trigged'+ str(e) ) 
+    
+##Export
+
+class StorageAPI:
+    def __init__(self, key):
+        self.authorization_key = key
+    
+    
+    def getTopLevelFolder(self, projectId):
+        
+        
+        try:
+            url = f'https://api.bentley.com/storage/?projectId={projectId}'
+            
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+            list_folderInstances = []
+            
+            response = requests.get(url, headers=headers)
+               
+            if(response.status_code == 200):
+                content = jsonParser(response.text)
+                list_folderInstances.extend(content['items'])
+                
+                return list_folderInstances
+                #return content
+            
+            else:
+                print('getTopLevelFolder failed', response.status_code)
+                return None
+
+#             while(True):
+#                 response = requests.get(url, headers=headers)
+#                 #response = requests.get(url, headers=headers, params = params)
+#                 if(response.status_code == 200):
+#                     content = jsonParser(response.text)
+#                     list_folderInstances.extend(content['items'])
+
+#                     if('next' in content['_links']):
+#                         url = content['_links']['next']['href']
+#                         print("next")
+
+#                     else:
+#                         return list_folderInstances
+
+#                 else:
+#                     print('getTopLevelFolder failed', response.status_code)
+#                     return None
+
+        except Exception as e:
+            print('getTopLevelFolder except trigged', e)
+            return None
+
+        
+    def createFolder(self, folderId, jsonload):
+        '''
+        create a new folder
+        "displayName": "test",
+        "description": "test folder"
+        '''
+        
+        try:
+            url = f'https://api.bentley.com/storage/folders/{folderId}/folders'
+            
+            headers = {'Accept': "application/vnd.bentley.itwin-platform.v1+json",
+                       'Authorization': self.authorization_key}
+            
+            response = requests.post(url, data=jsonload, headers=headers)
+               
+            if(response.status_code == 201):
+                content = jsonParser(response.text)
+                
+                return content
+
+            else:
+                errorhandler('createFolder', 'failed'+ str(response.status_code) ) 
+
+        except Exception as e:
+            errorhandler('createFolder', 'exception trigged'+ str(e) )
+	
+	
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger_file_handler = logging.handlers.RotatingFileHandler(
