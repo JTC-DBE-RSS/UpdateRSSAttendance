@@ -364,8 +364,91 @@ if(list_projects == None):
     print('No projects.')
     exit()
 
+##Read the forms
+
+#list_projects = [{'id': '69c70697-3747-4120-b185-dbd7d54388a0', 'displayName': 'JTC R&R to Biopolis Phase 1 (Synchro)', 'projectNumber': 'JTC BIOR (Synchro)'}]
+
+from datetime import date
+
+today = date.today()
+
+for project in list_projects:
+    if project['id'] == "69c70697-3747-4120-b185-dbd7d54388a0":
+        #print(project['id'])
+    
+        #Get Post OT Form
+        #Request token for with scope forms:read. 
+        auth.scope = ["issues:read"]
+        authorization_key = auth.getToken()
+        issues_API = IssuesAPI(authorization_key)
+        #Get all OT Request form
+        list_issueDataInstances = issues_API.getProjectIssueData(project['id'], "Post OT Form")
+
+        list_issueDetails = []
+        #Iterate every form ID to get form data details
+        for issues in list_issueDataInstances:
+            #print(issues)
+            #for every issue ID, get the Issue data details
+            issueDetail = issues_API.getIssueDataDetails(issues['id'])
+
+            if not(issueDetail is None):
+                #add to a list
+                list_issueDetails.append(issueDetail)
+                #print(list_issueDetails)
+
+        #Group if there is more than one RSS attendance form type
+        dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
+        #print(dictLists_IssueDataDetails)
+        #print("Extracted Post OT Forms")
+        #iterate for every Post OT issue
+        for key in dictLists_IssueDataDetails.keys():
+            #convert into dataframe
+            dfPostOT = pd.json_normalize(dictLists_IssueDataDetails[key])
+            #Convert the datetime into just day, month and year
+            dfPostOT['createdDateTime'] = dfPostOT['createdDateTime'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+            #To filter month and year
+            dfPostOT['yearmonth'] = dfPostOT['createdDateTime'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m'))
+            
+             ##Update OT hours
+        ##Only update days that there are values 
+        OTHourlist = []
+        
+        dfPostOT["PostOTTimeIn"] = pd.to_datetime(dfPostOT["properties.ActualOTStart"], format= '%H:%M',errors='coerce')
+        dfPostOT["PostOTTimeOut"] = pd.to_datetime(dfPostOT["properties.ActualOTEnd"], format= '%H:%M',errors='coerce')
+        dfPostOT["PostOTHour"] = (dfPostOT["PostOTTimeOut"].apply(lambda x:x.hour) - dfPostOT["PostOTTimeIn"].apply(lambda x:x.hour))+(dfPostOT["PostOTTimeOut"].apply(lambda x:x.minute) - dfPostOT["PostOTTimeIn"].apply(lambda x:x.minute))/60 - dfPostOT["properties.RSSMeal1"]
+        
+        ## if OT hours = -ve, need to add 24 hours
+        dfPostOT['PostOTHour'] = dfPostOT['PostOTHour'].apply(lambda x: x + 24 if x < 0 else x)
+        
+        #Update Attendance Form
+        auth.scope = ["issues:modify"]
+        authorization_key = auth.getToken()
+        issues_API = IssuesAPI(authorization_key)
+        
+        for id in dfPostOT['id']:
+            if dfPostOT["state"].loc[dfPostOT["id"] == id].values[0] == "Open":
+                #print(dfPostOT["PostOTHour"].loc[dfPostOT["id"] == id].values[0])
+                updatejsonload = {
+                    "assignee": {
+                        "displayName": str(dfPostOT[dfPostOT['id'] == id]["assignee.displayName"].values[0]),
+                        "id": str(dfPostOT[dfPostOT['id'] == id]["assignee.id"].values[0])
+                    },
+                    "properties": {
+                        "Updated__x0020__Date": str(today),
+                        "RSS__x0020__OT__x0020__1": dfPostOT[dfPostOT['id'] == id]["PostOTHour"].values[0]
+                    }
+                    #"formId": formId
+                }
+                updatejson_data = json.dumps(updatejsonload)
+
+                #print(updatejson_data)
+                updateissue = issues_API.updateIssueData(id, updatejson_data)
+                print(str(dfPostOT[dfPostOT['id'] == id]["assignee.displayName"].values[0]) + "'s Post OT Form updated")
+                        
+            else:
+                continue
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 logging.info('Admin logged in')
 
-#print(list_projects)
+print(list_projects)
