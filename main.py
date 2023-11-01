@@ -968,17 +968,10 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 logger_file_handler.setFormatter(formatter)
 logger.addHandler(logger_file_handler)
 
-from datetime import datetime
-
-###Testing Account
-##Name:Testing API
-# client_id = "service-TWoDsHSXkpUxst90rlqNu0rqP"
-# client_secret = "rwmPcsphk5AgkLeUh0u0kRac5NqF88IL7AFxnFQnKSKJybxXwn3dBuEEjN6jYiXpln8+LneyR+HbBcJCvMZqcA=="
-
 ##Implementation Account
 ## Name:JTC_DBE_API
-client_id = "service-ic9GskfCxPWYu4NeVGxAVGZ75"
-client_secret = "Ci8/yLvhfUqF1fLb8AlRmhJT8bRjn7S952Yyy1OZyQhdMnI8vX6o5lsP/HyzIRdDBV8BmcMl4qpTjYKnZyf1nw=="
+client_id = os.environ["CLIENT_ID"]
+client_secret = os.environ["CLIENT_SECRET"]
 scope = ["itwins:read"]
 
 print(datetime.now())

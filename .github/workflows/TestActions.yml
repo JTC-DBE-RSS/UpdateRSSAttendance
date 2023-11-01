@@ -6,9 +6,9 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -28,14 +28,17 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # install the python version needed
-          
+          python-version: "3.10" # install the python version needed
+
       - name: install python packages
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
+
       - name: execute py script # run main.py
+        env:
+          API_KEY: ${{ secrets.CLIENT_ID }}
+          SECRET_KEY: ${{ secrets.CLIENT_SECRET }}
         run: python main.py
 
       # Runs a set of commands using the runners shell
