@@ -566,7 +566,7 @@ class FormsAPI:
                 "Authorization": self.authorization_key,
             }
 
-            response = requests.get(url, headers=headers, params=params)
+            response = requests.get(url, headers=headers)
             if response.status_code == 200:
                 # content = response.read()
                 # content = jsonParser(response)
@@ -979,7 +979,7 @@ from datetime import datetime
 ## Name:JTC_DBE_API
 client_id = "service-ic9GskfCxPWYu4NeVGxAVGZ75"
 client_secret = "Ci8/yLvhfUqF1fLb8AlRmhJT8bRjn7S952Yyy1OZyQhdMnI8vX6o5lsP/HyzIRdDBV8BmcMl4qpTjYKnZyf1nw=="
-scope = ["projects:read"]
+scope = ["itwins:read"]
 
 print(datetime.now())
 # Create auth object, and get access token.
