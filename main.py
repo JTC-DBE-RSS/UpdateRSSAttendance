@@ -995,7 +995,7 @@ print(datetime.now())
 
 # Create iTwins_API object, and get all projects.
 itwins_API = iTwinsAPI(authorization_key)
-list_projects = itwins_API.getAllProjects()
+list_projects = itwins_API.getAllProjectsviaiTwins()
 
 if list_projects is None:
     print("No projects.")
