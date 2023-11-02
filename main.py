@@ -1,8 +1,12 @@
-import json
+try:
+    import ujson as json
+except ImportError:
+    import json
 import logging
 import logging.handlers
 import os
-from datetime import date, datetime
+import re
+from datetime import date
 
 import pandas as pd
 import requests
@@ -18,13 +22,18 @@ logger_file_handler = logging.handlers.RotatingFileHandler(
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger_file_handler.setFormatter(formatter)
 logger.addHandler(logger_file_handler)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
 
 try:
-    SOME_SECRET = os.environ["SOME_SECRET"]
+    CLIENT_ID = os.environ.get("CLIENT_ID")
+    CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+    if not CLIENT_ID or not CLIENT_SECRET:
+        raise KeyError
 except KeyError:
-    SOME_SECRET = "Token not available!"
-    # logger.info("Token not available!")
-    # raise
+    logger.error("CLIENT_ID or CLIENT_SECRET not available!")
+    exit()
 
 # Wrapper
 
@@ -46,13 +55,8 @@ class GenericWrapper:
 ##########################################################################################################################################
 
 # For templating
-import re
 
 # The parser
-try:
-    import ujson as json
-except ImportError:
-    import json
 
 # For templating
 # from jsonspec.pointer import extract, ExtractError
@@ -221,13 +225,11 @@ class JsonComment(GenericWrapper):
         except (ExtractError, ValueError) as e:
             # Sets value to empty string
             value = ""
-            print(e)
+            logger.info(e)
         return value
 
 
 ##########################################################################################################################################
-
-import json
 
 # from jsoncomment import JsonComment
 from collections import defaultdict
@@ -247,7 +249,7 @@ def groupFormDataDetails(list_formDataInstances):
     groupLists_formDataInstances = defaultdict(list)
 
     for formDataInstance in list_formDataInstances:
-        # print(formDataInstance)
+        # logger.info(formDataInstance)
         # break
         groupLists_formDataInstances[formDataInstance["formData"]["type"]].append(
             formDataInstance["formData"]
@@ -260,7 +262,7 @@ def groupIssueDataDetails(list_issueDataInstances):
     groupLists_issueDataInstances = defaultdict(list)
 
     for issues in list_issueDataInstances:
-        # print(formDataInstance)
+        # logger.info(formDataInstance)
         # break
         groupLists_issueDataInstances[issues["issue"]["type"]].append(issues["issue"])
 
@@ -268,7 +270,7 @@ def groupIssueDataDetails(list_issueDataInstances):
 
 
 def errorhandler(function, errorMessage):
-    print(function, errorMessage)
+    logger.info(function, errorMessage)
     exit()
 
 
@@ -297,8 +299,8 @@ class Auth:
             }
 
             response = requests.post(self.url, data=data)
-            # print(self.client_id)
-            # print(self.client_secret)
+            # logger.info(self.client_id)
+            # logger.info(self.client_secret)
             if response.status_code == 200:
                 content = json.loads(response.content)
                 token_type = content["token_type"]
@@ -348,7 +350,7 @@ class ProjectsAPI:
         return: list_projects_team
         """
         url = f"https://api.bentley.com/projects/{projectId}/members"
-        # print(url)
+        # logger.info(url)
         try:
             headers = {
                 "Accept": "application/vnd.bentley.itwin-platform.v1+json",
@@ -371,7 +373,7 @@ class ProjectsAPI:
                         return list_projectTeamMember
 
                 else:
-                    print("getFormDataDetails failed", response.status_code)
+                    logger.info("getFormDataDetails failed", response.status_code)
                     return None
 
         #             if(response.status_code == 200):
@@ -450,7 +452,7 @@ class FormsAPI:
 
             while True:
                 response = requests.get(url, headers=headers, params=params)
-                # print(response)
+                # logger.info(response)
                 if response.status_code == 200:
                     content = jsonParser(response.text)
                     list_formDataInstances.extend(content["formDataInstances"])
@@ -462,11 +464,11 @@ class FormsAPI:
                         return list_formDataInstances
 
                 else:
-                    print("getFormDataDetails failed", response.status_code)
+                    logger.info("getFormDataDetails failed", response.status_code)
                     return None
 
         except Exception as e:
-            print("getFormDataDetails except trigged", e)
+            logger.info("getFormDataDetails except trigged", e)
             return None
 
     def getFormDataDetails(self, formId):
@@ -608,7 +610,7 @@ class FormsAPI:
                 errorhandler("exportFormPdfs", "failed" + str(response.status_code))
 
         except Exception as e:
-            print(e)
+            logger.info(e)
             # errorhandler('exportFormPdfs', 'exception trigged'+ str(e) )
 
     def updateFormData(self, formId, updateformjsonload):
@@ -635,7 +637,7 @@ class FormsAPI:
 
             # convert string or dictionary into json format
             # json_data = payload
-            # print (json_data)
+            # logger.info (json_data)
             response = requests.patch(url, data=updateformjsonload, headers=headers)
 
             if response.status_code == 200:
@@ -682,11 +684,11 @@ class IssuesAPI:
                     return content
 
                 else:
-                    print("getIssueDataDefinitions failed", response.status_code)
+                    logger.info("getIssueDataDefinitions failed", response.status_code)
                     return None
 
         except Exception as e:
-            print("getIssueDataDefinition except trigged", e)
+            logger.info("getIssueDataDefinition except trigged", e)
             return None
 
     def getProjectIssueData(self, projectId, issuetype):
@@ -722,11 +724,11 @@ class IssuesAPI:
                         return list_issueDataInstances
 
                 else:
-                    print("getProjectIssueData failed", response.status_code)
+                    logger.info("getProjectIssueData failed", response.status_code)
                     return None
 
         except Exception as e:
-            print("getProjectIssueData except trigged", e)
+            logger.info("getProjectIssueData except trigged", e)
             return None
 
     def getIssueDataDetails(self, issueId):
@@ -787,7 +789,7 @@ class IssuesAPI:
 
             # convert string or dictionary into json format
             # json_data = payload
-            # print (json_data)
+            # logger.info (json_data)
             response = requests.post(url, data=jsonload, headers=headers)
 
             if response.status_code == 201:
@@ -825,7 +827,7 @@ class IssuesAPI:
 
             # convert string or dictionary into json format
             # json_data = payload
-            # print (json_data)
+            # logger.info (json_data)
             response = requests.patch(url, data=updatejsonload, headers=headers)
 
             if response.status_code == 200:
@@ -902,7 +904,7 @@ class StorageAPI:
                 # return content
 
             else:
-                print("getTopLevelFolder failed", response.status_code)
+                logger.info("getTopLevelFolder failed", response.status_code)
                 return None
 
         #             while(True):
@@ -914,17 +916,17 @@ class StorageAPI:
 
         #                     if('next' in content['_links']):
         #                         url = content['_links']['next']['href']
-        #                         print("next")
+        #                         logger.info("next")
 
         #                     else:
         #                         return list_folderInstances
 
         #                 else:
-        #                     print('getTopLevelFolder failed', response.status_code)
+        #                     logger.info('getTopLevelFolder failed', response.status_code)
         #                     return None
 
         except Exception as e:
-            print("getTopLevelFolder except trigged", e)
+            logger.info("getTopLevelFolder except trigged", e)
             return None
 
     def createFolder(self, folderId, jsonload):
@@ -956,31 +958,18 @@ class StorageAPI:
             errorhandler("createFolder", "exception trigged" + str(e))
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger_file_handler = logging.handlers.RotatingFileHandler(
-    "status.log",
-    maxBytes=1024 * 1024,
-    backupCount=1,
-    encoding="utf8",
-)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger_file_handler.setFormatter(formatter)
-logger.addHandler(logger_file_handler)
-
 ##Implementation Account
 ## Name:JTC_DBE_API
-client_id = os.environ.get("CLIENT_ID")
-client_secret = os.environ.get("CLIENT_SECRET")
+client_id = CLIENT_ID
+client_secret = CLIENT_SECRET
 scope = ["itwins:read"]
 
-print(datetime.now())
 # Create auth object, and get access token.
 auth = Auth(client_id, client_secret, scope)
 authorization_key = auth.getToken()
-print(authorization_key)
+logger.info(authorization_key)
 
-print(datetime.now())
+logger.info("Got access token.")
 
 # Create projects_API object, and get all projects.
 # projects_API = ProjectsAPI(authorization_key)
@@ -990,8 +979,10 @@ print(datetime.now())
 itwins_API = iTwinsAPI(authorization_key)
 list_projects = itwins_API.getAllProjectsviaiTwins()
 
+logger.info("Admin logged in")
+
 if list_projects is None:
-    print("No projects.")
+    logger.info("No projects.")
     exit()
 
 ##Read the forms
@@ -1002,7 +993,7 @@ today = date.today()
 
 for project in list_projects:
     if project["id"] == "69c70697-3747-4120-b185-dbd7d54388a0":
-        # print(project['id'])
+        # logger.info(project['id'])
 
         # Get Post OT Form
         # Request token for with scope forms:read.
@@ -1017,19 +1008,19 @@ for project in list_projects:
         list_issueDetails = []
         # Iterate every form ID to get form data details
         for issues in list_issueDataInstances:
-            # print(issues)
+            # logger.info(issues)
             # for every issue ID, get the Issue data details
             issueDetail = issues_API.getIssueDataDetails(issues["id"])
 
             if issueDetail is not None:
                 # add to a list
                 list_issueDetails.append(issueDetail)
-                # print(list_issueDetails)
+                # logger.info(list_issueDetails)
 
         # Group if there is more than one RSS attendance form type
         dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
-        # print(dictLists_IssueDataDetails)
-        # print("Extracted Post OT Forms")
+        # logger.info(dictLists_IssueDataDetails)
+        # logger.info("Extracted Post OT Forms")
         # iterate for every Post OT issue
         for key in dictLists_IssueDataDetails.keys():
             # convert into dataframe
@@ -1078,7 +1069,7 @@ for project in list_projects:
 
         for id in dfPostOT["id"]:
             if dfPostOT["state"].loc[dfPostOT["id"] == id].values[0] == "Open":
-                # print(dfPostOT["PostOTHour"].loc[dfPostOT["id"] == id].values[0])
+                # logger.info(dfPostOT["PostOTHour"].loc[dfPostOT["id"] == id].values[0])
                 updatejsonload = {
                     "assignee": {
                         "displayName": str(
@@ -1100,9 +1091,9 @@ for project in list_projects:
                 }
                 updatejson_data = json.dumps(updatejsonload)
 
-                # print(updatejson_data)
+                # logger.info(updatejson_data)
                 updateissue = issues_API.updateIssueData(id, updatejson_data)
-                print(
+                logger.info(
                     str(
                         dfPostOT[dfPostOT["id"] == id]["assignee.displayName"].values[0]
                     )
@@ -1111,9 +1102,6 @@ for project in list_projects:
 
             else:
                 continue
-
-logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
-logging.info("Admin logged in")
 
 ##Read the forms
 
@@ -1133,17 +1121,17 @@ for project in list_projects:
     authorization_key = auth.getToken()
     issues_API = IssuesAPI(authorization_key)
 
-    # print(authorization_key)
+    # logger.info(authorization_key)
     ##Get Attendance Form
 
     ##Get all the issue data ID related to RSS Attendance V1
-    # print(project['id'])
+    # logger.info(project['id'])
     list_issueDataInstances = issues_API.getProjectIssueData(
         project["id"], "RSS Attendance V1"
     )
-    # print(list_issueDataInstances)
+    # logger.info(list_issueDataInstances)
     list_issueDetails = []
-    # print(list_issueDataInstances)
+    # logger.info(list_issueDataInstances)
     for issues in list_issueDataInstances:
         # for every issue ID, get the Issue data details
         issueDetail = issues_API.getIssueDataDetails(issues["id"])
@@ -1151,12 +1139,12 @@ for project in list_projects:
         if issueDetail is not None:
             # add to a list
             list_issueDetails.append(issueDetail)
-            # print(list_issueDetails)
+            # logger.info(list_issueDetails)
 
     # Group if there is more than one RSS attendance form type
     dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
 
-    print("Extracted RSS Attendance Form")
+    logger.info("Extracted RSS Attendance Form")
     # iterate for every RSS attendance issue
     for key in dictLists_IssueDataDetails.keys():
         # convert into dataframe
@@ -1353,7 +1341,7 @@ for project in list_projects:
             lambda x: x + 24 if x < 0 else x
         )
 
-        # print(dfRSS2["D" + str(d) + "_Work_Hour"])
+        # logger.info(dfRSS2["D" + str(d) + "_Work_Hour"])
         OTHourlist.append("D" + str(d) + "OT")
 
     # WorkHourlist
@@ -1388,7 +1376,7 @@ for project in list_projects:
                 lambda x: x.minute
             )
         ) / 60
-        # print(dfRSS2["D" + str(d) + "_Work_Hour"])
+        # logger.info(dfRSS2["D" + str(d) + "_Work_Hour"])
         ## if OT hours = -ve, need to add 24 hours
         dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2["D" + str(d) + "_Work_Hour"].apply(
             lambda x: x + 24 if x < 0 else x
@@ -1411,7 +1399,7 @@ for project in list_projects:
     issues_API = IssuesAPI(authorization_key)
 
     for id in dfRSS2["id"]:
-        # print(dfRSS2["status"].loc[dfRSS2["id"] == id].values[0])
+        # logger.info(dfRSS2["status"].loc[dfRSS2["id"] == id].values[0])
         if (
             dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Assigned to RSS"
             or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
@@ -1454,7 +1442,7 @@ for project in list_projects:
                                 AddRemarks["D" + str(Day) + "__x0020__OT"] = dfRSS2[
                                     dfRSS2["id"] == id
                                 ]["D" + str(Day) + "OT"].values[0]
-                                # print("ok")
+                                # logger.info("ok")
                             else:
                                 continue
                         else:
@@ -1474,12 +1462,12 @@ for project in list_projects:
                                 ]["D" + str(Day) + "OT"].values[0]
                             else:
                                 continue
-                            # print("ok")
+                            # logger.info("ok")
                         else:
                             continue
                 else:
                     continue
-            # print(id)
+            # logger.info(id)
             updatejsonload = {
                 "assignee": {
                     "displayName": str(
@@ -1516,12 +1504,12 @@ for project in list_projects:
                 # "formId": formId
             }
             updatejsonload["properties"].update(AddRemarks)
-            # print(updatejsonload)
+            # logger.info(updatejsonload)
             updatejson_data = json.dumps(updatejsonload)
 
-            # print(updatejson_data)
+            # logger.info(updatejson_data)
             updateissue = issues_API.updateIssueData(id, updatejson_data)
-            print(
+            logger.info(
                 str(dfRSS2[dfRSS2["id"] == id]["assignee.displayName"].values[0])
                 + "'s RSS Form updated"
             )
