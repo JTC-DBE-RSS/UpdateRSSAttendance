@@ -962,7 +962,7 @@ class StorageAPI:
 client_id = CLIENT_ID
 client_secret = CLIENT_SECRET
 # list all required scope
-scope = ["itwins:read projects:read forms:read issues:read issues:modify"]
+scope = ["itwins:read issues:read issues:modify"]
 
 # Create auth object, and get access token.
 auth = Auth(client_id, client_secret, scope)
