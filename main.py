@@ -270,7 +270,7 @@ def groupIssueDataDetails(list_issueDataInstances):
 
 
 def errorhandler(function, errorMessage):
-    logger.info(function, errorMessage)
+    logger.info(function + " " + errorMessage)
     exit()
 
 
@@ -719,16 +719,15 @@ class IssuesAPI:
 
                     if "next" in content["_links"]:
                         url = content["_links"]["next"]["href"]
-
                     else:
                         return list_issueDataInstances
 
                 else:
-                    logger.info("getProjectIssueData failed", response.status_code)
+                    logger.info("getProjectIssueData failed " + response.status_code)
                     return None
 
         except Exception as e:
-            logger.info("getProjectIssueData except trigged", e)
+            logger.info("getProjectIssueData except trigged " + e)
             return None
 
     def getIssueDataDetails(self, issueId):
@@ -962,24 +961,25 @@ class StorageAPI:
 ## Name:JTC_DBE_API
 client_id = CLIENT_ID
 client_secret = CLIENT_SECRET
-scope = ["itwins:read"]
+# list all required scope
+scope = ["itwins:read projects:read forms:read issues:read issues:modify"]
 
 # Create auth object, and get access token.
 auth = Auth(client_id, client_secret, scope)
 authorization_key = auth.getToken()
-logger.info(authorization_key)
 
 logger.info("Got access token.")
 
-# Create projects_API object, and get all projects.
+# Create projects_API object, and get all projects. (deprecated)
 # projects_API = ProjectsAPI(authorization_key)
 # list_projects = projects_API.getAllProjects()
 
 # Create iTwins_API object, and get all projects.
 itwins_API = iTwinsAPI(authorization_key)
+issues_API = IssuesAPI(authorization_key)
 list_projects = itwins_API.getAllProjectsviaiTwins()
 
-logger.info("Admin logged in")
+logger.info("Got all projects.")
 
 if list_projects is None:
     logger.info("No projects.")
@@ -996,112 +996,112 @@ for project in list_projects:
         # logger.info(project['id'])
 
         # Get Post OT Form
-        # Request token for with scope forms:read.
-        auth.scope = ["issues:read"]
-        authorization_key = auth.getToken()
-        issues_API = IssuesAPI(authorization_key)
         # Get all OT Request form
         list_issueDataInstances = issues_API.getProjectIssueData(
             project["id"], "Post OT Form"
         )
 
-        list_issueDetails = []
-        # Iterate every form ID to get form data details
-        for issues in list_issueDataInstances:
-            # logger.info(issues)
-            # for every issue ID, get the Issue data details
-            issueDetail = issues_API.getIssueDataDetails(issues["id"])
+        if list_issueDataInstances is None:
+            logger.info(f"{project['displayName']} - No Post OT Form.")
+            continue
+        else:
+            list_issueDetails = []
+            # Iterate every form ID to get form data details
+            for issues in list_issueDataInstances:
+                # logger.info(issues)
+                # for every issue ID, get the Issue data details
+                issueDetail = issues_API.getIssueDataDetails(issues["id"])
 
-            if issueDetail is not None:
-                # add to a list
-                list_issueDetails.append(issueDetail)
-                # logger.info(list_issueDetails)
+                if issueDetail is not None:
+                    # add to a list
+                    list_issueDetails.append(issueDetail)
+                    # logger.info(list_issueDetails)
 
-        # Group if there is more than one RSS attendance form type
-        dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
-        # logger.info(dictLists_IssueDataDetails)
-        # logger.info("Extracted Post OT Forms")
-        # iterate for every Post OT issue
-        for key in dictLists_IssueDataDetails.keys():
-            # convert into dataframe
-            dfPostOT = pd.json_normalize(dictLists_IssueDataDetails[key])
-            # Convert the datetime into just day, month and year
-            dfPostOT["createdDateTime"] = dfPostOT["createdDateTime"].apply(
-                lambda x: pd.to_datetime(x).strftime("%Y-%m-%d")
+            logger.info(f"{project['displayName']} - Extracted Post OT Form.")
+
+            # Group if there is more than one RSS attendance form type
+            dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
+            # logger.info(dictLists_IssueDataDetails)
+            # logger.info("Extracted Post OT Forms")
+            # iterate for every Post OT issue
+            for key in dictLists_IssueDataDetails.keys():
+                # convert into dataframe
+                dfPostOT = pd.json_normalize(dictLists_IssueDataDetails[key])
+                # Convert the datetime into just day, month and year
+                dfPostOT["createdDateTime"] = dfPostOT["createdDateTime"].apply(
+                    lambda x: pd.to_datetime(x).strftime("%Y-%m-%d")
+                )
+                # To filter month and year
+                dfPostOT["yearmonth"] = dfPostOT["createdDateTime"].apply(
+                    lambda x: pd.to_datetime(x).strftime("%Y-%m")
+                )
+
+                ##Update OT hours
+            ##Only update days that there are values
+            OTHourlist = []
+
+            dfPostOT["PostOTTimeIn"] = pd.to_datetime(
+                dfPostOT["properties.ActualOTStart"], format="%H:%M", errors="coerce"
             )
-            # To filter month and year
-            dfPostOT["yearmonth"] = dfPostOT["createdDateTime"].apply(
-                lambda x: pd.to_datetime(x).strftime("%Y-%m")
+            dfPostOT["PostOTTimeOut"] = pd.to_datetime(
+                dfPostOT["properties.ActualOTEnd"], format="%H:%M", errors="coerce"
+            )
+            dfPostOT["PostOTHour"] = (
+                (
+                    dfPostOT["PostOTTimeOut"].apply(lambda x: x.hour)
+                    - dfPostOT["PostOTTimeIn"].apply(lambda x: x.hour)
+                )
+                + (
+                    dfPostOT["PostOTTimeOut"].apply(lambda x: x.minute)
+                    - dfPostOT["PostOTTimeIn"].apply(lambda x: x.minute)
+                )
+                / 60
+                - dfPostOT["properties.RSSMeal1"]
             )
 
-            ##Update OT hours
-        ##Only update days that there are values
-        OTHourlist = []
-
-        dfPostOT["PostOTTimeIn"] = pd.to_datetime(
-            dfPostOT["properties.ActualOTStart"], format="%H:%M", errors="coerce"
-        )
-        dfPostOT["PostOTTimeOut"] = pd.to_datetime(
-            dfPostOT["properties.ActualOTEnd"], format="%H:%M", errors="coerce"
-        )
-        dfPostOT["PostOTHour"] = (
-            (
-                dfPostOT["PostOTTimeOut"].apply(lambda x: x.hour)
-                - dfPostOT["PostOTTimeIn"].apply(lambda x: x.hour)
+            ## if OT hours = -ve, need to add 24 hours
+            dfPostOT["PostOTHour"] = dfPostOT["PostOTHour"].apply(
+                lambda x: x + 24 if x < 0 else x
             )
-            + (
-                dfPostOT["PostOTTimeOut"].apply(lambda x: x.minute)
-                - dfPostOT["PostOTTimeIn"].apply(lambda x: x.minute)
-            )
-            / 60
-            - dfPostOT["properties.RSSMeal1"]
-        )
 
-        ## if OT hours = -ve, need to add 24 hours
-        dfPostOT["PostOTHour"] = dfPostOT["PostOTHour"].apply(
-            lambda x: x + 24 if x < 0 else x
-        )
+            # Update Attendance Form
+            for id in dfPostOT["id"]:
+                if dfPostOT["state"].loc[dfPostOT["id"] == id].values[0] == "Open":
+                    # logger.info(dfPostOT["PostOTHour"].loc[dfPostOT["id"] == id].values[0])
+                    updatejsonload = {
+                        "assignee": {
+                            "displayName": str(
+                                dfPostOT[dfPostOT["id"] == id][
+                                    "assignee.displayName"
+                                ].values[0]
+                            ),
+                            "id": str(
+                                dfPostOT[dfPostOT["id"] == id]["assignee.id"].values[0]
+                            ),
+                        },
+                        "properties": {
+                            "Updated__x0020__Date": str(today),
+                            "RSS__x0020__OT__x0020__1": dfPostOT[dfPostOT["id"] == id][
+                                "PostOTHour"
+                            ].values[0],
+                        },
+                        # "formId": formId
+                    }
+                    updatejson_data = json.dumps(updatejsonload)
 
-        # Update Attendance Form
-        auth.scope = ["issues:modify"]
-        authorization_key = auth.getToken()
-        issues_API = IssuesAPI(authorization_key)
-
-        for id in dfPostOT["id"]:
-            if dfPostOT["state"].loc[dfPostOT["id"] == id].values[0] == "Open":
-                # logger.info(dfPostOT["PostOTHour"].loc[dfPostOT["id"] == id].values[0])
-                updatejsonload = {
-                    "assignee": {
-                        "displayName": str(
+                    # logger.info(updatejson_data)
+                    updateissue = issues_API.updateIssueData(id, updatejson_data)
+                    logger.info(
+                        str(
                             dfPostOT[dfPostOT["id"] == id][
                                 "assignee.displayName"
                             ].values[0]
-                        ),
-                        "id": str(
-                            dfPostOT[dfPostOT["id"] == id]["assignee.id"].values[0]
-                        ),
-                    },
-                    "properties": {
-                        "Updated__x0020__Date": str(today),
-                        "RSS__x0020__OT__x0020__1": dfPostOT[dfPostOT["id"] == id][
-                            "PostOTHour"
-                        ].values[0],
-                    },
-                    # "formId": formId
-                }
-                updatejson_data = json.dumps(updatejsonload)
-
-                # logger.info(updatejson_data)
-                updateissue = issues_API.updateIssueData(id, updatejson_data)
-                logger.info(
-                    str(
-                        dfPostOT[dfPostOT["id"] == id]["assignee.displayName"].values[0]
+                        )
+                        + "'s Post OT Form updated"
                     )
-                    + "'s Post OT Form updated"
-                )
 
-            else:
-                continue
+                else:
+                    continue
 
 ##Read the forms
 
@@ -1117,401 +1117,408 @@ today = date.today()
 
 for project in list_projects:
     # Update RSS Attendance Form
-    auth.scope = ["issues:read"]
-    authorization_key = auth.getToken()
-    issues_API = IssuesAPI(authorization_key)
-
-    # logger.info(authorization_key)
     ##Get Attendance Form
 
     ##Get all the issue data ID related to RSS Attendance V1
     # logger.info(project['id'])
-    list_issueDataInstances = issues_API.getProjectIssueData(
-        project["id"], "RSS Attendance V1"
-    )
-    # logger.info(list_issueDataInstances)
-    list_issueDetails = []
-    # logger.info(list_issueDataInstances)
-    for issues in list_issueDataInstances:
-        # for every issue ID, get the Issue data details
-        issueDetail = issues_API.getIssueDataDetails(issues["id"])
+    list_issueDataInstances = issues_API.getProjectIssueData(project["id"], RSS)
 
-        if issueDetail is not None:
-            # add to a list
-            list_issueDetails.append(issueDetail)
-            # logger.info(list_issueDetails)
+    if list_issueDataInstances is None:
+        logger.info(f"{project['displayName']} - No RSS Attendance Form.")
+        continue
+    else:
+        # logger.info(list_issueDataInstances)
+        list_issueDetails = []
+        # logger.info(list_issueDataInstances)
+        for issues in list_issueDataInstances:
+            # for every issue ID, get the Issue data details
+            issueDetail = issues_API.getIssueDataDetails(issues["id"])
 
-    # Group if there is more than one RSS attendance form type
-    dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
+            if issueDetail is not None:
+                # add to a list
+                list_issueDetails.append(issueDetail)
+                # logger.info(list_issueDetails)
 
-    logger.info("Extracted RSS Attendance Form")
-    # iterate for every RSS attendance issue
-    for key in dictLists_IssueDataDetails.keys():
-        # convert into dataframe
-        dfRSS = pd.json_normalize(dictLists_IssueDataDetails[key])
-        # Convert the datetime into just day, month and year
-        dfRSS["createdDateTime"] = dfRSS["createdDateTime"].apply(
-            lambda x: pd.to_datetime(x).strftime("%Y-%m-%d")
-        )
-        # To filter month and year
-        dfRSS["yearmonth"] = dfRSS["createdDateTime"].apply(
-            lambda x: pd.to_datetime(x).strftime("%Y-%m")
-        )
+        # Group if there is more than one RSS attendance form type
+        dictLists_IssueDataDetails = groupIssueDataDetails(list_issueDetails)
 
-        # To create a dataframe for all RSS form within the month
-        # dfRSS2 = dfRSS.loc[(dfRSS["yearmonth"] == str(today)[:-3])]
-
-        ## Testing for within a month and after
-        dfRSS2 = dfRSS
-
-    ## Update RSS Form Data
-
-    # TotalOff
-    # TotalLeaves
-    # TotalOtherRemarks
-    # TotalCovered
-    # TotalNonCovered
-    # Total_x200_Working_Days
-    # TotalWorkingHours
-    # Total_x200_Overtime_Hours
-
-    ##Calculate the total leave, off, mc, hospitalisation
-
-    dfRSS2["Sum_FullLeave"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Leave"), axis=1
-    )
-
-    dfRSS2["Sum_HalfLeave"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Leave"), axis=1
-    )
-
-    dfRSS2["Sum_FullOff"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Off"), axis=1
-    )
-
-    dfRSS2["Sum_HalfOff"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Off"), axis=1
-    )
-
-    dfRSS2["Sum_Leave"] = dfRSS2["Sum_FullLeave"] + dfRSS2["Sum_HalfLeave"] * 0.5
-
-    dfRSS2["TotalOff"] = dfRSS2["Sum_FullOff"] + dfRSS2["Sum_HalfOff"] * 0.5
-
-    dfRSS2["Sum_HalfMC"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day MC"), axis=1
-    )
-
-    dfRSS2["Sum_FullMC"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day MC"), axis=1
-    )
-
-    dfRSS2["Sum_Hospitalisation"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Hospitalisation Leave"), axis=1
-    )
-
-    dfRSS2["Sum_SickLeave"] = (
-        dfRSS2["Sum_FullMC"]
-        + dfRSS2["Sum_HalfMC"] * 0.5
-        + dfRSS2["Sum_Hospitalisation"]
-    )
-
-    dfRSS2["TotalLeaves"] = dfRSS2["Sum_SickLeave"] + dfRSS2["Sum_Leave"]
-
-    dfRSS2["Sum_FullOthers"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Others"), axis=1
-    )
-
-    dfRSS2["Sum_HalfOthers"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Others"), axis=1
-    )
-
-    dfRSS2["Sum_Others"] = dfRSS2["Sum_FullOthers"] + dfRSS2["Sum_HalfOthers"] * 0.5
-
-    # Calculate absent day with covering officer
-    dfRSS2["TotalFullCovered"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Cover"), axis=1
-    )
-    dfRSS2["TotalHalfCovered"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Cover"), axis=1
-    )
-    dfRSS2["TotalCovered"] = (
-        dfRSS2["TotalFullCovered"] + dfRSS2["TotalHalfCovered"] * 0.5
-    )
-
-    dfRSS2["TotalNonCovered"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "No Cover"), axis=1
-    )
-
-    dfRSS2["TotalAbsentDays"] = (
-        dfRSS2["TotalOff"] + dfRSS2["Sum_Others"] + dfRSS2["TotalLeaves"]
-    )
-
-    dfRSS2["TotalHalfCovered"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Cover"), axis=1
-    )
-    dfRSS2["TotalCovered"] = (
-        dfRSS2["TotalFullCovered"] + dfRSS2["TotalHalfCovered"] * 0.5
-    )
-
-    dfRSS2["TotalNonCovered"] = dfRSS2["TotalAbsentDays"] - dfRSS2["TotalCovered"]
-
-    dfRSS2["Sum_NotAvailable"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Not Available"), axis=1
-    )
-    dfRSS2["Sum_NA"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "NA"), axis=1
-    )
-
-    dfRSS2["Sum_Weekend"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Weekend (Sunday)"), axis=1
-    )
-
-    dfRSS2["Sum_Public Holiday"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Public Holiday"), axis=1
-    )
-
-    dfRSS2["Sum_Saturday"] = dfRSS2.apply(
-        lambda row: sum(row[0 : len(dfRSS2.columns)] == "Sat"), axis=1
-    )
-
-    dfRSS2["Sum_Day"] = 31
-
-    dfRSS2["Sum_WorkingDays"] = (
-        dfRSS2["Sum_Day"]
-        - dfRSS2["Sum_NotAvailable"]
-        - dfRSS2["Sum_SickLeave"]
-        - dfRSS2["Sum_Others"]
-        - dfRSS2["Sum_Leave"]
-        - dfRSS2["Sum_Public Holiday"]
-        - dfRSS2["Sum_Weekend"]
-        - dfRSS2["Sum_NA"]
-    )
-
-    dfRSS2["Sum_Day_Month"] = 26
-
-    dfRSS2["Total__x0020__Working__x0020__Days"] = (
-        dfRSS2["Sum_Day_Month"] - dfRSS2["TotalNonCovered"] - dfRSS2["Sum_NotAvailable"]
-    )
-
-    # Total__x0020__Working__x0020__Days
-    # dfRSS2["Sum_WorkingHours"] = dfRSS2["Sum_WorkingDays"] * 8
-
-    ##Update OT hours
-    ##Only update days that there are values
-    OTHourlist = []
-    for d in range(1, 32):
-        if "properties.D" + str(d) + "OTTimein" in dfRSS2.columns:
-            dfRSS2["D" + str(d) + "OTTimein"] = pd.to_datetime(
-                dfRSS2["properties.D" + str(d) + "OTTimein"],
-                format="%H:%M",
-                errors="coerce",
+        logger.info(f"{project['displayName']} - Extracted RSS Attendance Form")
+        # iterate for every RSS attendance issue
+        for key in dictLists_IssueDataDetails.keys():
+            # convert into dataframe
+            dfRSS = pd.json_normalize(dictLists_IssueDataDetails[key])
+            # Convert the datetime into just day, month and year
+            dfRSS["createdDateTime"] = dfRSS["createdDateTime"].apply(
+                lambda x: pd.to_datetime(x).strftime("%Y-%m-%d")
             )
-        else:
-            continue
-        if "properties.D" + str(d) + "OTTimeOut" in dfRSS2.columns:
-            dfRSS2["D" + str(d) + "OTTimeOut"] = pd.to_datetime(
-                dfRSS2["properties.D" + str(d) + "OTTimeOut"],
-                format="%H:%M",
-                errors="coerce",
+            # To filter month and year
+            dfRSS["yearmonth"] = dfRSS["createdDateTime"].apply(
+                lambda x: pd.to_datetime(x).strftime("%Y-%m")
             )
-        else:
-            continue
-        if "properties.D" + str(d) + "__x0020__OT__x0020__Meal" in dfRSS2.columns:
-            dfRSS2["D" + str(d) + "__x0020__OT__x0020__Meal"] = dfRSS2[
-                "properties.D" + str(d) + "__x0020__OT__x0020__Meal"
-            ]
-        else:
-            continue
 
-        dfRSS2["D" + str(d) + "OT"] = (
-            (
-                dfRSS2["D" + str(d) + "OTTimeOut"].apply(lambda x: x.hour)
-                - dfRSS2["D" + str(d) + "OTTimein"].apply(lambda x: x.hour)
-            )
-            + (
-                dfRSS2["D" + str(d) + "OTTimeOut"].apply(lambda x: x.minute)
-                - dfRSS2["D" + str(d) + "OTTimein"].apply(lambda x: x.minute)
-            )
-            / 60
-            - dfRSS2["properties.D" + str(d) + "__x0020__OT__x0020__Meal"]
+            # To create a dataframe for all RSS form within the month
+            # dfRSS2 = dfRSS.loc[(dfRSS["yearmonth"] == str(today)[:-3])]
+
+            ## Testing for within a month and after
+            dfRSS2 = dfRSS
+
+        ## Update RSS Form Data
+
+        # TotalOff
+        # TotalLeaves
+        # TotalOtherRemarks
+        # TotalCovered
+        # TotalNonCovered
+        # Total_x200_Working_Days
+        # TotalWorkingHours
+        # Total_x200_Overtime_Hours
+
+        ##Calculate the total leave, off, mc, hospitalisation
+
+        dfRSS2["Sum_FullLeave"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Leave"), axis=1
         )
 
-        ## if OT hours = -ve, need to add 24 hours
-        dfRSS2["D" + str(d) + "OT"] = dfRSS2["D" + str(d) + "OT"].apply(
-            lambda x: x + 24 if x < 0 else x
+        dfRSS2["Sum_HalfLeave"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Leave"), axis=1
         )
 
-        # logger.info(dfRSS2["D" + str(d) + "_Work_Hour"])
-        OTHourlist.append("D" + str(d) + "OT")
-
-    # WorkHourlist
-    dfRSS2["Total_x200_Overtime_Hours"] = dfRSS2[OTHourlist].sum(axis=1)
-
-    ##Update Working Hours
-
-    WorkHourlist = []
-    for d in range(1, 32):
-        if "properties.D" + str(d) + "__x0020__Time__x0020__In" in dfRSS2.columns:
-            dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"] = pd.to_datetime(
-                dfRSS2["properties.D" + str(d) + "__x0020__Time__x0020__In"],
-                format="%H:%M",
-                errors="coerce",
-            )
-        else:
-            continue
-        if "properties.D" + str(d) + "__x0020__Time__x0020__Out" in dfRSS2.columns:
-            dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"] = pd.to_datetime(
-                dfRSS2["properties.D" + str(d) + "__x0020__Time__x0020__Out"],
-                format="%H:%M",
-                errors="coerce",
-            )
-        else:
-            continue
-        dfRSS2["D" + str(d) + "_Work_Hour"] = (
-            dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(lambda x: x.hour)
-            - dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"].apply(lambda x: x.hour)
-        ) + (
-            dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(lambda x: x.minute)
-            - dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"].apply(
-                lambda x: x.minute
-            )
-        ) / 60
-        # logger.info(dfRSS2["D" + str(d) + "_Work_Hour"])
-        ## if OT hours = -ve, need to add 24 hours
-        dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2["D" + str(d) + "_Work_Hour"].apply(
-            lambda x: x + 24 if x < 0 else x
+        dfRSS2["Sum_FullOff"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Off"), axis=1
         )
 
-        ##If more than 8, put 8. Elif if between 4 to 8, minus 1 and less than 4, remain
-
-        dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2["D" + str(d) + "_Work_Hour"].apply(
-            lambda x: 8 if x > 8 else ((x - 1) if x > 4 else x)
+        dfRSS2["Sum_HalfOff"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Off"), axis=1
         )
-        WorkHourlist.append("D" + str(d) + "_Work_Hour")
 
-    # WorkHourlist
+        dfRSS2["Sum_Leave"] = dfRSS2["Sum_FullLeave"] + dfRSS2["Sum_HalfLeave"] * 0.5
 
-    dfRSS2["Sum_WorkingHours"] = dfRSS2[WorkHourlist].sum(axis=1)
+        dfRSS2["TotalOff"] = dfRSS2["Sum_FullOff"] + dfRSS2["Sum_HalfOff"] * 0.5
 
-    # Update Attendance Form
-    auth.scope = ["issues:modify"]
-    authorization_key = auth.getToken()
-    issues_API = IssuesAPI(authorization_key)
+        dfRSS2["Sum_HalfMC"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day MC"), axis=1
+        )
 
-    for id in dfRSS2["id"]:
-        # logger.info(dfRSS2["status"].loc[dfRSS2["id"] == id].values[0])
-        if (
-            dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Assigned to RSS"
-            or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
-            == "Send to Main Contractor For Verification"
-            or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
-            == "Send to Consultant For Verification"
-            or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
-            == "Send to JTC For Verification"
-            or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
-            == "Send to Lead RSS For Verification"
-        ):
-            ##Collate all the work hour needs to be updated
-            AddRemarks = {}
-            for Day in range(1, 32):
-                DDay = "D" + str(Day) + "_Work_Hour"
-                if DDay in dfRSS2.columns:
-                    # if it is not a null value
-                    if not (
-                        pd.isnull(
-                            dfRSS2[dfRSS2["id"] == id][
-                                "D" + str(Day) + "_Work_Hour"
-                            ].values[0]
-                        )
-                    ):
-                        # Append the work hour into the remarks to be updated
-                        AddRemarks["D" + str(Day) + "__x0020__Work__x0020__Hour"] = int(
-                            dfRSS2[dfRSS2["id"] == id][
-                                "D" + str(Day) + "_Work_Hour"
-                            ].values[0]
-                        )
-                        test = "D" + str(Day) + "OT"
-                        if test in dfRSS2.columns:
-                            if not (
-                                pd.isnull(
-                                    dfRSS2[dfRSS2["id"] == id][
-                                        "D" + str(Day) + "OT"
-                                    ].values[0]
-                                )
-                            ):
-                                AddRemarks["D" + str(Day) + "__x0020__OT"] = dfRSS2[
-                                    dfRSS2["id"] == id
-                                ]["D" + str(Day) + "OT"].values[0]
+        dfRSS2["Sum_FullMC"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day MC"), axis=1
+        )
+
+        dfRSS2["Sum_Hospitalisation"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Hospitalisation Leave"),
+            axis=1,
+        )
+
+        dfRSS2["Sum_SickLeave"] = (
+            dfRSS2["Sum_FullMC"]
+            + dfRSS2["Sum_HalfMC"] * 0.5
+            + dfRSS2["Sum_Hospitalisation"]
+        )
+
+        dfRSS2["TotalLeaves"] = dfRSS2["Sum_SickLeave"] + dfRSS2["Sum_Leave"]
+
+        dfRSS2["Sum_FullOthers"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Others"), axis=1
+        )
+
+        dfRSS2["Sum_HalfOthers"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Others"), axis=1
+        )
+
+        dfRSS2["Sum_Others"] = dfRSS2["Sum_FullOthers"] + dfRSS2["Sum_HalfOthers"] * 0.5
+
+        # Calculate absent day with covering officer
+        dfRSS2["TotalFullCovered"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Full Day Cover"), axis=1
+        )
+        dfRSS2["TotalHalfCovered"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Cover"), axis=1
+        )
+        dfRSS2["TotalCovered"] = (
+            dfRSS2["TotalFullCovered"] + dfRSS2["TotalHalfCovered"] * 0.5
+        )
+
+        dfRSS2["TotalNonCovered"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "No Cover"), axis=1
+        )
+
+        dfRSS2["TotalAbsentDays"] = (
+            dfRSS2["TotalOff"] + dfRSS2["Sum_Others"] + dfRSS2["TotalLeaves"]
+        )
+
+        dfRSS2["TotalHalfCovered"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Half Day Cover"), axis=1
+        )
+        dfRSS2["TotalCovered"] = (
+            dfRSS2["TotalFullCovered"] + dfRSS2["TotalHalfCovered"] * 0.5
+        )
+
+        dfRSS2["TotalNonCovered"] = dfRSS2["TotalAbsentDays"] - dfRSS2["TotalCovered"]
+
+        dfRSS2["Sum_NotAvailable"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Not Available"), axis=1
+        )
+        dfRSS2["Sum_NA"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "NA"), axis=1
+        )
+
+        dfRSS2["Sum_Weekend"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Weekend (Sunday)"), axis=1
+        )
+
+        dfRSS2["Sum_Public Holiday"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Public Holiday"), axis=1
+        )
+
+        dfRSS2["Sum_Saturday"] = dfRSS2.apply(
+            lambda row: sum(row[0 : len(dfRSS2.columns)] == "Sat"), axis=1
+        )
+
+        dfRSS2["Sum_Day"] = 31
+
+        dfRSS2["Sum_WorkingDays"] = (
+            dfRSS2["Sum_Day"]
+            - dfRSS2["Sum_NotAvailable"]
+            - dfRSS2["Sum_SickLeave"]
+            - dfRSS2["Sum_Others"]
+            - dfRSS2["Sum_Leave"]
+            - dfRSS2["Sum_Public Holiday"]
+            - dfRSS2["Sum_Weekend"]
+            - dfRSS2["Sum_NA"]
+        )
+
+        dfRSS2["Sum_Day_Month"] = 26
+
+        dfRSS2["Total__x0020__Working__x0020__Days"] = (
+            dfRSS2["Sum_Day_Month"]
+            - dfRSS2["TotalNonCovered"]
+            - dfRSS2["Sum_NotAvailable"]
+        )
+
+        # Total__x0020__Working__x0020__Days
+        # dfRSS2["Sum_WorkingHours"] = dfRSS2["Sum_WorkingDays"] * 8
+
+        ##Update OT hours
+        ##Only update days that there are values
+        OTHourlist = []
+        for d in range(1, 32):
+            if "properties.D" + str(d) + "OTTimein" in dfRSS2.columns:
+                dfRSS2["D" + str(d) + "OTTimein"] = pd.to_datetime(
+                    dfRSS2["properties.D" + str(d) + "OTTimein"],
+                    format="%H:%M",
+                    errors="coerce",
+                )
+            else:
+                continue
+            if "properties.D" + str(d) + "OTTimeOut" in dfRSS2.columns:
+                dfRSS2["D" + str(d) + "OTTimeOut"] = pd.to_datetime(
+                    dfRSS2["properties.D" + str(d) + "OTTimeOut"],
+                    format="%H:%M",
+                    errors="coerce",
+                )
+            else:
+                continue
+            if "properties.D" + str(d) + "__x0020__OT__x0020__Meal" in dfRSS2.columns:
+                dfRSS2["D" + str(d) + "__x0020__OT__x0020__Meal"] = dfRSS2[
+                    "properties.D" + str(d) + "__x0020__OT__x0020__Meal"
+                ]
+            else:
+                continue
+
+            dfRSS2["D" + str(d) + "OT"] = (
+                (
+                    dfRSS2["D" + str(d) + "OTTimeOut"].apply(lambda x: x.hour)
+                    - dfRSS2["D" + str(d) + "OTTimein"].apply(lambda x: x.hour)
+                )
+                + (
+                    dfRSS2["D" + str(d) + "OTTimeOut"].apply(lambda x: x.minute)
+                    - dfRSS2["D" + str(d) + "OTTimein"].apply(lambda x: x.minute)
+                )
+                / 60
+                - dfRSS2["properties.D" + str(d) + "__x0020__OT__x0020__Meal"]
+            )
+
+            ## if OT hours = -ve, need to add 24 hours
+            dfRSS2["D" + str(d) + "OT"] = dfRSS2["D" + str(d) + "OT"].apply(
+                lambda x: x + 24 if x < 0 else x
+            )
+
+            # logger.info(dfRSS2["D" + str(d) + "_Work_Hour"])
+            OTHourlist.append("D" + str(d) + "OT")
+
+        # WorkHourlist
+        dfRSS2["Total_x200_Overtime_Hours"] = dfRSS2[OTHourlist].sum(axis=1)
+
+        ##Update Working Hours
+
+        WorkHourlist = []
+        for d in range(1, 32):
+            if "properties.D" + str(d) + "__x0020__Time__x0020__In" in dfRSS2.columns:
+                dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"] = pd.to_datetime(
+                    dfRSS2["properties.D" + str(d) + "__x0020__Time__x0020__In"],
+                    format="%H:%M",
+                    errors="coerce",
+                )
+            else:
+                continue
+            if "properties.D" + str(d) + "__x0020__Time__x0020__Out" in dfRSS2.columns:
+                dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"] = pd.to_datetime(
+                    dfRSS2["properties.D" + str(d) + "__x0020__Time__x0020__Out"],
+                    format="%H:%M",
+                    errors="coerce",
+                )
+            else:
+                continue
+            dfRSS2["D" + str(d) + "_Work_Hour"] = (
+                dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(
+                    lambda x: x.hour
+                )
+                - dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"].apply(
+                    lambda x: x.hour
+                )
+            ) + (
+                dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(
+                    lambda x: x.minute
+                )
+                - dfRSS2["D" + str(d) + "__x0020__Time__x0020__In"].apply(
+                    lambda x: x.minute
+                )
+            ) / 60
+            # logger.info(dfRSS2["D" + str(d) + "_Work_Hour"])
+            ## if OT hours = -ve, need to add 24 hours
+            dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2[
+                "D" + str(d) + "_Work_Hour"
+            ].apply(lambda x: x + 24 if x < 0 else x)
+
+            ##If more than 8, put 8. Elif if between 4 to 8, minus 1 and less than 4, remain
+
+            dfRSS2["D" + str(d) + "_Work_Hour"] = dfRSS2[
+                "D" + str(d) + "_Work_Hour"
+            ].apply(lambda x: 8 if x > 8 else ((x - 1) if x > 4 else x))
+            WorkHourlist.append("D" + str(d) + "_Work_Hour")
+
+        # WorkHourlist
+
+        dfRSS2["Sum_WorkingHours"] = dfRSS2[WorkHourlist].sum(axis=1)
+
+        # Update Attendance Form
+        for id in dfRSS2["id"]:
+            # logger.info(dfRSS2["status"].loc[dfRSS2["id"] == id].values[0])
+            if (
+                dfRSS2["status"].loc[dfRSS2["id"] == id].values[0] == "Assigned to RSS"
+                or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
+                == "Send to Main Contractor For Verification"
+                or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
+                == "Send to Consultant For Verification"
+                or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
+                == "Send to JTC For Verification"
+                or dfRSS2["status"].loc[dfRSS2["id"] == id].values[0]
+                == "Send to Lead RSS For Verification"
+            ):
+                ##Collate all the work hour needs to be updated
+                AddRemarks = {}
+                for Day in range(1, 32):
+                    DDay = "D" + str(Day) + "_Work_Hour"
+                    if DDay in dfRSS2.columns:
+                        # if it is not a null value
+                        if not (
+                            pd.isnull(
+                                dfRSS2[dfRSS2["id"] == id][
+                                    "D" + str(Day) + "_Work_Hour"
+                                ].values[0]
+                            )
+                        ):
+                            # Append the work hour into the remarks to be updated
+                            AddRemarks[
+                                "D" + str(Day) + "__x0020__Work__x0020__Hour"
+                            ] = int(
+                                dfRSS2[dfRSS2["id"] == id][
+                                    "D" + str(Day) + "_Work_Hour"
+                                ].values[0]
+                            )
+                            test = "D" + str(Day) + "OT"
+                            if test in dfRSS2.columns:
+                                if not (
+                                    pd.isnull(
+                                        dfRSS2[dfRSS2["id"] == id][
+                                            "D" + str(Day) + "OT"
+                                        ].values[0]
+                                    )
+                                ):
+                                    AddRemarks["D" + str(Day) + "__x0020__OT"] = dfRSS2[
+                                        dfRSS2["id"] == id
+                                    ]["D" + str(Day) + "OT"].values[0]
+                                    # logger.info("ok")
+                                else:
+                                    continue
+                            else:
+                                continue
+                        else:
+                            test = "D" + str(Day) + "OT"
+                            if test in dfRSS2.columns:
+                                if not (
+                                    pd.isnull(
+                                        dfRSS2[dfRSS2["id"] == id][
+                                            "D" + str(Day) + "OT"
+                                        ].values[0]
+                                    )
+                                ):
+                                    AddRemarks["D" + str(Day) + "__x0020__OT"] = dfRSS2[
+                                        dfRSS2["id"] == id
+                                    ]["D" + str(Day) + "OT"].values[0]
+                                else:
+                                    continue
                                 # logger.info("ok")
                             else:
                                 continue
-                        else:
-                            continue
                     else:
-                        test = "D" + str(Day) + "OT"
-                        if test in dfRSS2.columns:
-                            if not (
-                                pd.isnull(
-                                    dfRSS2[dfRSS2["id"] == id][
-                                        "D" + str(Day) + "OT"
-                                    ].values[0]
-                                )
-                            ):
-                                AddRemarks["D" + str(Day) + "__x0020__OT"] = dfRSS2[
-                                    dfRSS2["id"] == id
-                                ]["D" + str(Day) + "OT"].values[0]
-                            else:
-                                continue
-                            # logger.info("ok")
-                        else:
-                            continue
-                else:
-                    continue
-            # logger.info(id)
-            updatejsonload = {
-                "assignee": {
-                    "displayName": str(
-                        dfRSS2[dfRSS2["id"] == id]["assignee.displayName"].values[0]
-                    ),
-                    "id": str(dfRSS2[dfRSS2["id"] == id]["assignee.id"].values[0]),
-                },
-                "properties": {
-                    "Updated__x0020__Date__x0020__By": str(today),
-                    "TotalOff": dfRSS2[dfRSS2["id"] == id]["TotalOff"].values[0],
-                    "TotalLeaves": dfRSS2[dfRSS2["id"] == id]["TotalLeaves"].values[0],
-                    # "TotalMCs": dfRSS2[dfRSS2['id'] == id]["Sum_SickLeave"].values[0],
-                    "TotalOtherRemarks": dfRSS2[dfRSS2["id"] == id][
-                        "Sum_Others"
-                    ].values[0],
-                    "TotalCovered": dfRSS2[dfRSS2["id"] == id]["TotalCovered"].values[
-                        0
-                    ],
-                    "TotalNonCovered": dfRSS2[dfRSS2["id"] == id][
-                        "TotalNonCovered"
-                    ].values[0],
-                    "Total__x0020__Working__x0020__Days": str(
-                        dfRSS2[dfRSS2["id"] == id][
-                            "Total__x0020__Working__x0020__Days"
-                        ].values[0]
-                    ),
-                    "TotalWorkingHours": dfRSS2[dfRSS2["id"] == id][
-                        "Sum_WorkingHours"
-                    ].values[0],
-                    "Total__x0020__Overtime__x0020__Hours": dfRSS2[dfRSS2["id"] == id][
-                        "Total_x200_Overtime_Hours"
-                    ].values[0],
-                },
-                # "formId": formId
-            }
-            updatejsonload["properties"].update(AddRemarks)
-            # logger.info(updatejsonload)
-            updatejson_data = json.dumps(updatejsonload)
+                        continue
+                # logger.info(id)
+                updatejsonload = {
+                    "assignee": {
+                        "displayName": str(
+                            dfRSS2[dfRSS2["id"] == id]["assignee.displayName"].values[0]
+                        ),
+                        "id": str(dfRSS2[dfRSS2["id"] == id]["assignee.id"].values[0]),
+                    },
+                    "properties": {
+                        "Updated__x0020__Date__x0020__By": str(today),
+                        "TotalOff": dfRSS2[dfRSS2["id"] == id]["TotalOff"].values[0],
+                        "TotalLeaves": dfRSS2[dfRSS2["id"] == id]["TotalLeaves"].values[
+                            0
+                        ],
+                        # "TotalMCs": dfRSS2[dfRSS2['id'] == id]["Sum_SickLeave"].values[0],
+                        "TotalOtherRemarks": dfRSS2[dfRSS2["id"] == id][
+                            "Sum_Others"
+                        ].values[0],
+                        "TotalCovered": dfRSS2[dfRSS2["id"] == id][
+                            "TotalCovered"
+                        ].values[0],
+                        "TotalNonCovered": dfRSS2[dfRSS2["id"] == id][
+                            "TotalNonCovered"
+                        ].values[0],
+                        "Total__x0020__Working__x0020__Days": str(
+                            dfRSS2[dfRSS2["id"] == id][
+                                "Total__x0020__Working__x0020__Days"
+                            ].values[0]
+                        ),
+                        "TotalWorkingHours": dfRSS2[dfRSS2["id"] == id][
+                            "Sum_WorkingHours"
+                        ].values[0],
+                        "Total__x0020__Overtime__x0020__Hours": dfRSS2[
+                            dfRSS2["id"] == id
+                        ]["Total_x200_Overtime_Hours"].values[0],
+                    },
+                    # "formId": formId
+                }
+                updatejsonload["properties"].update(AddRemarks)
+                # logger.info(updatejsonload)
+                updatejson_data = json.dumps(updatejsonload)
 
-            # logger.info(updatejson_data)
-            updateissue = issues_API.updateIssueData(id, updatejson_data)
-            logger.info(
-                str(dfRSS2[dfRSS2["id"] == id]["assignee.displayName"].values[0])
-                + "'s RSS Form updated"
-            )
-        else:
-            continue
+                # logger.info(updatejson_data)
+                updateissue = issues_API.updateIssueData(id, updatejson_data)
+                logger.info(
+                    str(dfRSS2[dfRSS2["id"] == id]["assignee.displayName"].values[0])
+                    + "'s RSS Form updated"
+                )
+            else:
+                continue
