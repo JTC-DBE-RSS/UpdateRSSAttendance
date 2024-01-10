@@ -273,13 +273,11 @@ def groupIssueDataDetails(list_issueDataInstances):
 
 
 def errorhandler(function, errorMessage):
-    logger.info(function + " " + errorMessage)
+    logger.error(function + " " + errorMessage)
     exit()
 
 
 ### Auth
-
-
 class Auth:
     def __init__(self, client_id, client_secret, scope):
         self.client_id = client_id
@@ -316,79 +314,6 @@ class Auth:
 
         except Exception as e:
             errorhandler("getToken", f"exception trigged, {e}")
-
-
-class ProjectsAPI:
-    def __init__(self, key):
-        self.authorization_key = key
-
-    def getAllProjects(self):
-        """
-        Get all projects.
-        return: list_projects
-        """
-        url = "https://api.bentley.com/projects"
-
-        try:
-            headers = {
-                "Accept": "application/vnd.bentley.itwin-platform.v1+json",
-                "Authorization": self.authorization_key,
-            }
-            response = requests.get(url, headers=headers)
-
-            if response.status_code == 200:
-                content = jsonParser(response.text)
-                list_projects = content["projects"]
-                return list_projects
-
-            else:
-                errorhandler("getAllProjects", "failed" + response.status_code)
-
-        except Exception as e:
-            errorhandler("getAllProjects", "exception trigged" + e)
-
-    def getProjectTeamMembers(self, projectId):
-        """
-        Get all projects team member.
-        return: list_projects_team
-        """
-        url = f"https://api.bentley.com/projects/{projectId}/members"
-        # logger.info(url)
-        try:
-            headers = {
-                "Accept": "application/vnd.bentley.itwin-platform.v1+json",
-                "Authorization": self.authorization_key,
-            }
-            response = requests.get(url, headers=headers)
-
-            list_projectTeamMember = []
-
-            while True:
-                response = requests.get(url, headers=headers)
-                if response.status_code == 200:
-                    content = jsonParser(response.text)
-                    list_projectTeamMember.extend(content["members"])
-
-                    if "next" in content["_links"]:
-                        url = content["_links"]["next"]["href"]
-
-                    else:
-                        return list_projectTeamMember
-
-                else:
-                    logger.info("getFormDataDetails failed", response.status_code)
-                    return None
-
-        #             if(response.status_code == 200):
-        #                 content = jsonParser(response.text)
-        #                 list_projects_team = (content['members'])
-        #                 return list_projects_team
-
-        #             else:
-        #                 errorhandler('getProjectTeamMembers', 'failed'+ response.status_code )
-
-        except Exception as e:
-            errorhandler("getProjectTeamMembers", "exception trigged" + e)
 
 
 ###### iTwinsAPI
@@ -430,8 +355,6 @@ class iTwinsAPI:
 
 
 ###### Forms
-
-
 class FormsAPI:
     def __init__(self, key):
         self.authorization_key = key
@@ -656,8 +579,6 @@ class FormsAPI:
 
 
 ##### Issues
-
-
 class IssuesAPI:
     def __init__(self, key):
         self.authorization_key = key
@@ -687,11 +608,11 @@ class IssuesAPI:
                     return content
 
                 else:
-                    logger.info("getIssueDataDefinitions failed", response.status_code)
+                    logger.error("getIssueDataDefinitions failed", response.status_code)
                     return None
 
         except Exception as e:
-            logger.info("getIssueDataDefinition except trigged", e)
+            logger.error("getIssueDataDefinition except trigged", e)
             return None
 
     def getProjectIssueData(self, projectId, issuetype):
@@ -726,11 +647,11 @@ class IssuesAPI:
                         return list_issueDataInstances
 
                 else:
-                    logger.info("getProjectIssueData failed " + response.status_code)
+                    logger.error("getProjectIssueData failed " + response.status_code)
                     return None
 
         except Exception as e:
-            logger.info("getProjectIssueData except trigged " + e)
+            logger.error("getProjectIssueData except trigged " + e)
             return None
 
     def getIssueDataDetails(self, issueId):
@@ -762,7 +683,7 @@ class IssuesAPI:
                 return content
 
             else:
-                errorhandler("getIssueDataDetails", "failed" + response.status_code)
+                logger.error("getIssueDataDetails", "failed" + response.status_code)
 
         except Exception as e:
             errorhandler("getIssueDataDetails", "exception trigged" + e)
@@ -800,7 +721,7 @@ class IssuesAPI:
                 return content
 
             else:
-                errorhandler("postIssueData", "failed" + str(response.status_code))
+                logger.error("postIssueData", "failed" + str(response.status_code))
 
         except Exception as e:
             errorhandler("postIssueData", "exception trigged" + str(e))
@@ -838,10 +759,11 @@ class IssuesAPI:
                 return content
 
             else:
-                errorhandler("updateIssueData", " failed " + str(response.status_code))
+                logger.error("updateIssueData failed " + str(response.status_code))
+                return None
 
         except Exception as e:
-            errorhandler("updateIssueData", " exception trigged " + str(e))
+            errorhandler("updateIssueData", "exception trigged " + str(e))
 
     def exportIssuePdfs(self, IssueId, folderId):
         """
@@ -872,15 +794,13 @@ class IssuesAPI:
                 return response
 
             else:
-                errorhandler("exportIssuePdfs", "failed" + str(response.status_code))
+                logger.error("exportIssuePdfs", "failed" + str(response.status_code))
 
         except Exception as e:
             errorhandler("exportIssuePdfs", "exception trigged" + str(e))
 
 
 ##Export
-
-
 class StorageAPI:
     def __init__(self, key):
         self.authorization_key = key
@@ -906,7 +826,7 @@ class StorageAPI:
                 # return content
 
             else:
-                logger.info("getTopLevelFolder failed", response.status_code)
+                logger.error("getTopLevelFolder failed", response.status_code)
                 return None
 
         #             while(True):
@@ -1022,6 +942,9 @@ for project in list_projects:
                     # add to a list
                     list_issueDetails.append(issueDetail)
                     # logger.info(list_issueDetails)
+                else:
+                    logger.info(f"{issues['id']} - No Issue Data Details.")
+                    continue
 
             logger.info(f"{project['displayName']} - Extracted Post OT Forms")
 
@@ -1042,7 +965,7 @@ for project in list_projects:
                     lambda x: pd.to_datetime(x).strftime("%Y-%m")
                 )
 
-                ##Update OT hours
+            ##Update OT hours
             ##Only update days that there are values
             OTHourlist = []
 
@@ -1062,8 +985,7 @@ for project in list_projects:
                     - dfPostOT["PostOTTimeIn"].apply(lambda x: x.minute)
                 )
                 / 60
-                - dfPostOT["properties.RSSMeal1"]
-            )
+            ) - dfPostOT["properties.RSSMeal1"]
 
             ## if OT hours = -ve, need to add 24 hours
             dfPostOT["PostOTHour"] = dfPostOT["PostOTHour"].apply(
@@ -1094,19 +1016,39 @@ for project in list_projects:
                         # "formId": formId
                     }
                     updatejson_data = json.dumps(updatejsonload)
-
                     # logger.info(updatejson_data)
+                    # logger.info(
+                    #     "PostOTHour: "
+                    #     + str(dfPostOT[dfPostOT["id"] == id]["PostOTHour"].values[0])
+                    #     + " TimeIn: "
+                    #     + str(dfPostOT[dfPostOT["id"] == id]["PostOTTimeIn"].values[0])
+                    #     + " TimeOut: "
+                    #     + str(dfPostOT[dfPostOT["id"] == id]["PostOTTimeOut"].values[0])
+                    # )
                     updateissue = issues_API.updateIssueData(id, updatejson_data)
-                    logger.info(
-                        "[{}] {}'s Post OT Form updated".format(
-                            dfPostOT[dfPostOT["id"] == id]["number"].values[0],
-                            str(
-                                dfPostOT[dfPostOT["id"] == id][
-                                    "assignee.displayName"
-                                ].values[0]
-                            ),
+                    if updateissue is not None:
+                        logger.info(
+                            "[{}] {}'s Post OT Form updated".format(
+                                dfPostOT[dfPostOT["id"] == id]["number"].values[0],
+                                str(
+                                    dfPostOT[dfPostOT["id"] == id][
+                                        "assignee.displayName"
+                                    ].values[0]
+                                ),
+                            )
                         )
-                    )
+                    else:
+                        logger.info(
+                            "[{}] {}'s Post OT Form failed to update".format(
+                                dfPostOT[dfPostOT["id"] == id]["number"].values[0],
+                                str(
+                                    dfPostOT[dfPostOT["id"] == id][
+                                        "assignee.displayName"
+                                    ].values[0]
+                                ),
+                            )
+                        )
+                        logger.info(updatejson_data)
 
                 else:
                     continue
@@ -1589,13 +1531,27 @@ for project in list_projects:
 
                 # logger.info(updatejson_data)
                 updateissue = issues_API.updateIssueData(id, updatejson_data)
-                logger.info(
-                    "[{}] {}'s RSS Form updated".format(
-                        dfRSS2[dfRSS2["id"] == id]["number"].values[0],
-                        str(
-                            dfRSS2[dfRSS2["id"] == id]["assignee.displayName"].values[0]
-                        ),
+                if updateissue is not None:
+                    logger.info(
+                        "[{}] {}'s RSS Form updated".format(
+                            dfRSS2[dfRSS2["id"] == id]["number"].values[0],
+                            str(
+                                dfRSS2[dfRSS2["id"] == id][
+                                    "assignee.displayName"
+                                ].values[0]
+                            ),
+                        )
                     )
-                )
+                else:
+                    logger.info(
+                        "[{}] {}'s RSS Form failed to update".format(
+                            dfRSS2[dfRSS2["id"] == id]["number"].values[0],
+                            str(
+                                dfRSS2[dfRSS2["id"] == id][
+                                    "assignee.displayName"
+                                ].values[0]
+                            ),
+                        )
+                    )
             else:
                 continue
