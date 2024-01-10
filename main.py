@@ -36,7 +36,7 @@ try:
         raise KeyError
 except KeyError:
     logger.error("CLIENT_ID or CLIENT_SECRET not available!")
-    exit()
+    exit(1)
 
 # Wrapper
 
@@ -274,7 +274,7 @@ def groupIssueDataDetails(list_issueDataInstances):
 
 def errorhandler(function, errorMessage):
     logger.error(function + " " + errorMessage)
-    exit()
+    exit(1)
 
 
 ### Auth
