@@ -1053,7 +1053,7 @@ for project in list_projects:
                 else:
                     continue
 
-##Read the forms
+# Read the forms
 
 # list_projects = [{'id': '69c70697-3747-4120-b185-dbd7d54388a0', 'displayName': 'JTC R&R to Biopolis Phase 1 (Synchro)', 'projectNumber': 'JTC BIOR (Synchro)'}]
 
@@ -1356,6 +1356,7 @@ for project in list_projects:
                 )
             else:
                 continue
+
             new_dfRSS2["D" + str(d) + "_Work_Hour"] = (
                 new_dfRSS2["D" + str(d) + "__x0020__Time__x0020__Out"].apply(
                     lambda x: x.hour
@@ -1408,7 +1409,7 @@ for project in list_projects:
             dfRSS2 = new_dfRSS2
 
         # WorkHourlist
-
+        new_dfRSS2 = dfRSS2.copy()
         new_dfRSS2["Sum_WorkingHours"] = new_dfRSS2[WorkHourlist].sum(axis=1)
 
         # Replace the original DataFrame with the new one
@@ -1449,6 +1450,7 @@ for project in list_projects:
                                     "D" + str(Day) + "_Work_Hour"
                                 ].values[0]
                             )
+                            # Append OT Hour
                             test = "D" + str(Day) + "OT"
                             if test in dfRSS2.columns:
                                 if not (
@@ -1467,6 +1469,11 @@ for project in list_projects:
                             else:
                                 continue
                         else:
+                            # Append the work hour as 0 into the remarks to be updated if it is a null value
+                            AddRemarks[
+                                "D" + str(Day) + "__x0020__Work__x0020__Hour"
+                            ] = 0
+                            # Append OT Hour
                             test = "D" + str(Day) + "OT"
                             if test in dfRSS2.columns:
                                 if not (
