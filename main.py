@@ -559,6 +559,7 @@ class FormsAPI:
             headers = {
                 "Accept": "application/vnd.bentley.itwin-platform.v1+json",
                 "Authorization": self.authorization_key,
+                "Content-Type": "application/json"
             }
 
             # convert string or dictionary into json format
