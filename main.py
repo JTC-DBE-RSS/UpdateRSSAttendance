@@ -648,11 +648,11 @@ class IssuesAPI:
                         return list_issueDataInstances
 
                 else:
-                    logger.error("getProjectIssueData failed " + response.status_code)
+                    logger.error("getProjectIssueData failed " + str(response.status_code))
                     return None
 
         except Exception as e:
-            logger.error("getProjectIssueData except trigged " + e)
+            logger.error("getProjectIssueData except trigged " + str(e))
             return None
 
     def getIssueDataDetails(self, issueId):
